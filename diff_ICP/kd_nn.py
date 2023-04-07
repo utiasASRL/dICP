@@ -35,6 +35,7 @@ class KDTree:
                 build_tree(points[median + 1:], depth + 1)
             )
         self.root = build_tree(points, 0)
+        self.points = points
 
     def add_point(self, point):
         node = self.root
@@ -77,6 +78,31 @@ class KDTree:
             self._nearest_neighbour(node.right, point)
             if (point[node.axis] - node.point[node.axis]) ** 2 < self.nearest_distance:
                 self._nearest_neighbour(node.left, point)
+
+    def plot(self):
+        # Plot points
+        x = [point[0] for point in self.points]
+        y = [point[1] for point in self.points]
+        plt.scatter(x, y, marker='o', color='b')
+        plt.show()
+
+    def plot_overlay(self, other_pc_tree):
+        # Plot points
+        x_self = [point[0] for point in self.points]
+        y_self = [point[1] for point in self.points]
+        plt.scatter(x_self, y_self, marker='o', color='b')
+
+        x_other = [point[0] for point in other_pc_tree.points]
+        y_other = [point[1] for point in other_pc_tree.points]
+        plt.scatter(x_other, y_other, marker='o', color='r')
+
+        # Find min and max x and y values from both point clouds
+        max_val = max(max(x_self), max(x_other), max(y_self), max(y_other))
+        min_val = min(min(x_self), min(x_other), min(y_self), min(y_other))
+
+        plt.xlim(1.5*min_val, 1.5*max_val)
+        plt.ylim(1.5*min_val, 1.5*max_val)
+        plt.show()
 
 # Define main function to test KDTree development
 def main():
