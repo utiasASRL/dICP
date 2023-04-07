@@ -5,9 +5,9 @@ import pytest
 import numpy as np
 import torch
 torch.set_printoptions(precision=8)
-from diff_ICP.ICP import ptp_ICP, diff_ptp_ICP, plot_overlay
-from diff_ICP.kd_nn import KDTree
-from pylgmath import se3op
+from dICP.ICP import ptp_ICP, diff_ptp_ICP, plot_overlay
+from dICP.kd_nn import KDTree
+from dICP import se3op
 import matplotlib.pyplot as plt
 
 @pytest.fixture

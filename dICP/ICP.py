@@ -5,8 +5,8 @@
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from diff_ICP.kd_nn import KDTree
-from diff_ICP.diff_nn import diff_nn
+from dICP.kd_nn import KDTree
+from dICP.diff_nn import diff_nn
 
 def ptp_ICP(source_tree, target_tree, max_iterations=100, tolerance=1e-12):
     """

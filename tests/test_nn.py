@@ -3,8 +3,8 @@
 """
 import pytest
 import torch
-from diff_ICP.kd_nn import KDTree
-from diff_ICP.diff_nn import diff_nn
+from dICP.kd_nn import KDTree
+from dICP.diff_nn import diff_nn
 
 @pytest.fixture
 def points():
