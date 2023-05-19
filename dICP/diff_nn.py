@@ -3,7 +3,10 @@ import torch.nn.functional as F
 
 def diff_nn(x, y):
     """
-    Computes the differentiable nearest neighbor of x from the matrix y using softmax.
+    Computes the differentiable nearest neighbor of all entries in source x 
+    to the target point cloud y using softmax.
+    :param x: Source points [m x 3].
+    :param y: Target points [n x 3/6].
     """
     
     # Expand x and y to have an additional dimension for broadcasting
@@ -16,35 +19,14 @@ def diff_nn(x, y):
 
     # Apply the softmax function to the negative distances to obtain a probability distribution
     probs = F.softmax(-distances, dim=1)    # shape: (m, n)
-
+    
     # Compute the argmax of the probability distribution to obtain the index of the closest point
     index = torch.argmax(probs, dim=1)  # shape: (m,)
-
+    
     # Select the closest point from y using the index
-    neighbors = torch.gather(y_use, 1, index.unsqueeze(0).unsqueeze(2).repeat(1, 1, 6)).squeeze(1)
+    neighbors = torch.gather(y_use, 1, index.unsqueeze(0).unsqueeze(2).repeat(1, 1, y_use.shape[2])).squeeze(1)
 
     return neighbors
-
-def diff_nn_single(x, y):
-    """
-    Computes the differentiable nearest neighbor of x from the matrix y using softmax.
-    """
-    
-    # If y has 6 elements, then normals are included, in this case extract first 3 for operations
-    # Compute the squared Euclidean distances between x and each point in y
-    distances = torch.sum((x - y[:, :3])**2, dim=1)
-
-    # Apply the softmax function to the negative distances to obtain a probability distribution
-    probs = F.softmax(-distances, dim=0)
-
-    # Compute the argmax of the probability distribution to obtain the index of the closest point
-    index = torch.argmax(probs)
-
-    # Select the closest point from y using the index
-    neighbor = y[index]
-
-    return neighbor
-
 
 def diff_nn2(x, y):
     """
