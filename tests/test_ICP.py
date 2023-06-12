@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 import torch
 torch.set_printoptions(precision=8)
-from dICP.ICP import pt2pt_ICP, pt2pt_dICP, pt2pl_dICP
+from dICP.ICP import ICP
 from dICP.visualization import plot_overlay
 from dICP.kd_nn import KDTree
 from pylgmath import se3op
@@ -45,7 +45,8 @@ def test_pt2pt_ICP(source, target, max_iterations, tolerance):
     T_init = np.eye(4)
 
     # Run ICP
-    source_transformed, T_ts_pred = pt2pt_ICP(source_tree, target_tree, max_iterations=max_iterations, tolerance=tolerance, T_init=T_init)
+    pt2pt_ICP = ICP(icp_type='pt2pt', differentiable = False, max_iterations=max_iterations, tolerance=tolerance)
+    source_transformed, T_ts_pred = pt2pt_ICP.icp(source_tree, target_tree, T_init)
 
     # Plot results
     #target_tree.plot_overlay(source_tree)
@@ -73,7 +74,8 @@ def test_pt2pt_dICP(source, target, max_iterations, tolerance):
     T_init = torch.eye(4, dtype=source.dtype)
 
     # Run ICP
-    source_transformed, T_ts_pred = pt2pt_dICP(source, target, max_iterations=max_iterations, tolerance=tolerance, T_init=T_init)
+    pt2pt_dICP = ICP(icp_type='pt2pt', differentiable = True, max_iterations=max_iterations, tolerance=tolerance)
+    source_transformed, T_ts_pred = pt2pt_dICP.icp(source, target, T_init)
 
     # Plot results
     #plot_overlay(source_transformed.detach().numpy(), target.detach().numpy(), file_name='pt2pt_dICP.png')
@@ -107,7 +109,8 @@ def test_pt2pl_dICP(source, target, max_iterations, tolerance):
     T_init = torch.eye(4, dtype=source.dtype)
 
     # Run ICP
-    source_transformed, T_ts_pred = pt2pl_dICP(source, target, max_iterations=max_iterations, tolerance=tolerance, T_init=T_init)
+    pt2pl_dICP = ICP(icp_type='pt2pl', differentiable = True, max_iterations=max_iterations, tolerance=tolerance)
+    source_transformed, T_ts_pred = pt2pl_dICP.icp(source, target, T_init)
 
     # Plot results
     #plot_overlay(source_transformed[:,:,0].detach().numpy(), target.detach().numpy(), file_name='pt2pl_dICP.png')

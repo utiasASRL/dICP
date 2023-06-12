@@ -6,6 +6,7 @@ dependencies:
   - pip==20.0.2
   - matplotlib==3.7.1
   - nomkl
+  - pyyaml
   - pip:
     - asrl-pylgmath
     - torch==2.0.1

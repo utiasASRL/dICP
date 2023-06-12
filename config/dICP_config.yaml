@@ -1,0 +1,13 @@
+setup:
+  config_path: '../config/dICP_config.yaml'  # Change to project config path with same dICP yaml structure
+
+dICP:
+  parameters:
+    tanh_steepness: 5.0
+  
+  functionality:
+    sparse: True
+    differentiable: True
+
+  logging:
+    verbose: False
