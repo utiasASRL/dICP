@@ -1,13 +1,16 @@
 setup:
-  config_path: '../config/dICP_config.yaml'  # Change to project config path with same dICP yaml structure
+  # Change to project config path with same dICP yaml structure
+  # This allows to have a single yaml config file for a larger project
+  config_path: '../config/dICP_config.yaml'
 
 dICP:
   parameters:
     tanh_steepness: 5.0
+    const_iter: True  # If true, force a constant number of iterations as defined by max_iter
   
   functionality:
-    sparse: True
-    differentiable: True
+    sparse: False
+    svd: False  # If true, use SVD to solve pt2pt problem, no effect for pt2pl
 
   logging:
     verbose: False

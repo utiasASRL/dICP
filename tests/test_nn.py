@@ -3,8 +3,8 @@
 """
 import pytest
 import torch
-from dICP.kd_nn import KDTree
-from dICP.diff_nn import diff_nn
+from dICP.KDTree_ICP import KDTree
+from dICP.nn import nn
 
 @pytest.fixture
 def points():
@@ -27,6 +27,9 @@ def test_kd_nn(points):
     assert nearest_point2 == expected_nearest_point2
 
 def test_diff_nn(points):
+    # Create nearest neighbour searcher
+    diff_nn = nn(differentiable=True)
+
     # Define points
     points = torch.tensor(points, requires_grad=True, dtype=torch.float)
 
@@ -34,7 +37,7 @@ def test_diff_nn(points):
     query_point = torch.tensor((9, 4, 0), requires_grad=True, dtype=torch.float).reshape(1,3)
     expected_nearest_point1 = torch.tensor((8, 7, 0), requires_grad=True, dtype=torch.float)
 
-    nearest_point1 = diff_nn(query_point, points)
+    nearest_point1 = diff_nn.find_nn(query_point, points)
 
     # Assert that the nearest point is correct
     assert torch.all(nearest_point1 == expected_nearest_point1)
@@ -51,7 +54,7 @@ def test_diff_nn(points):
     # Now, add a new point and test again
     points = torch.cat((points, torch.tensor((10, 2, 0), requires_grad=True, dtype=torch.float).view(1, -1)))
     expected_nearest_point2 = torch.tensor((10, 2, 0), requires_grad=True, dtype=torch.float)
-    nearest_point2 = diff_nn(query_point, points)
+    nearest_point2 = diff_nn.find_nn(query_point, points)
 
     # Assert that the nearest point is correct
     assert torch.all(nearest_point2 == expected_nearest_point2)

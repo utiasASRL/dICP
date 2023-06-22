@@ -6,12 +6,13 @@ import yaml
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from dICP.kd_nn import KDTree
-from dICP.diff_nn import diff_nn
+from dICP.KDTree_ICP import KDTree
+from dICP.nn import nn
+from dICP.loss import loss
 import torch.nn.functional as F
 
 class ICP:
-    def __init__(self, icp_type='pt2pl', max_iterations=100, tolerance=1e-12, differentiable=None):
+    def __init__(self, icp_type='pt2pl', max_iterations=100, tolerance=1e-12, differentiable=True):
         def load_config(file_path):
             with open(file_path, 'r') as f:
                 config = yaml.safe_load(f)
@@ -26,21 +27,17 @@ class ICP:
         self.icp_type = icp_type
         self.max_iterations = max_iterations
         self.tolerance = tolerance
-
+        self.const_iter = self.config['dICP']['parameters']['const_iter']
         self.verbose = self.config['dICP']['logging']['verbose']
         self.sparse = self.config['dICP']['functionality']['sparse']
-        if differentiable is not None:
-            self.diff = differentiable
-        else:
-            self.diff = self.config['dICP']['functionality']['differentiable'] 
+        self.diff = differentiable
 
-    def icp(self, source, target, T_init, trim_dist=5.0, huber_delta=1.0, dim=3):
+        self.nn = nn(self.diff)
+
+    def icp(self, source, target, T_init, trim_dist=None, loss_fn=None, dim=3):
+        return self.dICP(source, target, T_init, trim_dist, loss_fn, dim)
         if self.diff:
-            if self.icp_type == 'pt2pt':
-                return self.pt2pt_dICP(source, target, T_init)
-            elif self.icp_type == 'pt2pl':
-                return self.pt2pl_dICP(source, target, T_init, trim_dist, huber_delta, dim)
-        
+            return self.dICP(source, target, T_init, trim_dist, huber_delta, dim)
         else:
             if self.icp_type == 'pt2pt':
                 return self.pt2pt_ICP(source, target, T_init)
@@ -48,8 +45,7 @@ class ICP:
                 pass
                 #self.pt2pl_ICP(source, target, T_init, trim_dist, huber_delta, dim)
 
-
-    def pt2pt_ICP(self, source_tree, target_tree, T_init):
+    def pt2pt_kdICP(self, source_tree, target_tree, T_init):
         """
         Point-to-point ICP algorithm.
         :param source_tree: Source point cloud tree resolved in source frame ps_s.
@@ -112,7 +108,7 @@ class ICP:
 
         return KDTree(ps_s.tolist()), T_ts
 
-    def pt2pt_dICP(self, source, target, T_init):
+    def pt2pt_dICP_SVD(self, source, target, T_init, trim_dist=None, huber_delta=None, dim=3):
         """
         Differentiable point-to-point ICP algorithm.
         :param source: A pytorch tensor of shape (n, d) representing the source point cloud.
@@ -125,19 +121,15 @@ class ICP:
         # Initialize transformation matrix
         T_ts = T_init
         # Source points are resolved in s frame
-        if source.shape[1] == 6:
-            ps_s = source[:, 0:3]
-        else:
-            ps_s = source
-        if target.shape[1] == 6:
-            target = target[:, 0:3]
+        ps_s = source[:, 0:3]
+        target = target[:, 0:3]
 
         # Iterate until convergence
         for ii in range(self.max_iterations):
             # Find nearest neighbour for each point in source, these points are in target frame
             nn_t = torch.zeros((source.shape[0], target.shape[1]), dtype=source.dtype)
             for jj in range(len(source)):
-                nn_t[jj] = diff_nn(ps_s[jj].reshape(1, 3), target)
+                nn_t[jj] = self.nn.find_nn(ps_s[jj].reshape(1, 3), target)
 
             # Compute centroids
             mean_ps_s = torch.mean(ps_s, dim=0).reshape(3, 1)
@@ -170,10 +162,12 @@ class ICP:
             if torch.sum((ps_s - nn_t) ** 2) < self.tolerance:
                 break
 
+        if self.verbose:
+            print("ICP converged in {} iterations".format(ii))
+
         return ps_s, T_ts
 
-
-    def pt2pl_dICP(self, source, target, T_init, trim_dist=5.0, huber_delta=1.0, dim=3):
+    def dICP(self, source, target, T_init, trim_dist=None, loss_fn=None, dim=3):
         """
         Point-to-plane ICP algorithm.
         :param source_tree: Source point cloud tree resolved in source frame ps_s [n x 6].
@@ -182,9 +176,17 @@ class ICP:
         :param tolerance: Tolerance for convergence.
         :return: Transformed source point cloud and transformation from source to target T_ts.
         """
-        steep_fact = self.config['dICP']['parameters']['tanh_steepness']
         # Confirm that source, target, and T_init types match
         assert source.dtype == target.dtype == T_init.dtype
+
+        if self.icp_type == 'pt2pl':
+            # Confirm that normals for target exist
+            assert target.shape[1] == 6
+        else:
+            target = target[:, 0:3]
+
+        # Load in param
+        steep_fact = self.config['dICP']['parameters']['tanh_steepness']
 
         # Save device type so that everything can be on same device
         device = source.device
@@ -206,34 +208,36 @@ class ICP:
             ps_t = C_ts @ ps_s + r_st_t.reshape(1, 3, 1)
 
             # Find nearest neighbours, these points are in target frame
-            nn = diff_nn(ps_t.reshape(-1, 3), target).squeeze()
+            nn = self.nn.find_nn(ps_t.reshape(-1, 3), target).squeeze()
             nn_t = nn[:, :3].reshape(-1, 3, 1)
-            nn_norm = nn[:, 3:].reshape(-1, 3, 1)
 
             # Compute errors
-            nn_err = ps_t - nn_t
-            err = torch.sum(nn_err * nn_norm, axis=(1, 2))
+            if self.icp_type == 'pt2pl':
+                nn_err = ps_t - nn_t
+                nn_norm = nn[:, 3:].reshape(-1, 3, 1)
+                err = torch.sum(nn_err * nn_norm, axis=(1, 2))
+                #nn_err = nn_err.squeeze() # Get rid of final dimension for loss function
+            else:
+                nn_err = (ps_t - nn_t).reshape(-1, 1)
+                err = (ps_t - nn_t).reshape(-1, 1)
 
             # Compute weights based on trim distance and huber delta
-            if huber_delta is not None and huber_delta > 0.0:
-                #w_huber = torch.where(torch.abs(err) > huber_delta, huber_delta / torch.abs(err), torch.ones_like(err))
-                # Use pseudo huber loss
-                w_huber = huber_delta**2 / (huber_delta**2 + err**2)
-            else:
-                w_huber = torch.ones_like(err)
+            w = torch.ones_like(err).squeeze()
+            if trim_dist is not None and trim_dist >= 0.0:
+                trim = loss(name="trim", metric=trim_dist, differentiable=self.diff, tanh_steepness=steep_fact)
+                w = w * trim.get_weight(nn_err).squeeze()
 
-            if trim_dist is not None and trim_dist > 0.0:
-                # Use a soft trim distance check, gradient of tanh controlled by steep_fact
-                w_trim = 0.5 * torch.tanh(steep_fact * (trim_dist - torch.linalg.norm(nn_err, axis=1).squeeze()) - 3.0) + 0.5
-            else:
-                w_trim = torch.ones_like(err)
-            
-            # Compute resulting weight
-            w = w_huber * w_trim
+            if loss_fn is not None:
+                loss_fn_obj = loss(name=loss_fn['name'], metric=loss_fn['metric'], differentiable=self.diff, tanh_steepness=steep_fact)
+                w = w * loss_fn_obj.get_weight(err).squeeze()
 
             # Compute Jacobian components of err with respect to T_ts
-            J_C = torch.bmm(nn_norm.transpose(1,2), self.__skew_operator(C_ts @ ps_s)).transpose(1,2)
-            J_r = - nn_norm
+            if self.icp_type == 'pt2pl':
+                J_C = torch.bmm(nn_norm.transpose(1,2), self.__skew_operator(C_ts @ ps_s)).transpose(1,2)
+                J_r = - nn_norm
+            else:
+                J_C = self.__skew_operator(C_ts @ ps_s)
+                J_r = - torch.eye(3, device=device).repeat(ps_s.shape[0], 1, 1)
 
             # Reshape err, w, J_C, and J_r to be N-dimensional arrays
             err = err.reshape(-1)
@@ -277,12 +281,13 @@ class ICP:
             T_ts_new[0:3, 3:] = r_st_t - del_r
             T_ts = T_ts_new
 
-            # Check for convergence
-            if torch.linalg.norm(del_T_ts.detach()) < self.tolerance:
+            # Check for convergence if not constant iterations
+            if torch.linalg.norm(del_T_ts.detach()) < self.tolerance and not self.const_iter:
                 break
 
         if self.verbose:
-            print("ICP converged in {} iterations".format(ii))
+            print("ICP converged in {} iterations".format(ii+1))
+            print("Final del_T_ts: {}".format(torch.linalg.norm(del_T_ts.detach())))
 
         # Update source point cloud with converged transformation
         ps_t_final = (T_ts[0:3, 0:3] @ ps_s.squeeze().T + T_ts[0:3, 3].reshape(3,1)).T.unsqueeze(2)
