@@ -12,15 +12,13 @@ from dICP.loss import loss
 import torch.nn.functional as F
 
 class ICP:
-    def __init__(self, icp_type='pt2pl', max_iterations=100, tolerance=1e-12, differentiable=True):
+    def __init__(self, config_path='../config/dICP_config.yaml', icp_type='pt2pl', max_iterations=100, tolerance=1e-12, differentiable=True):
         def load_config(file_path):
             with open(file_path, 'r') as f:
                 config = yaml.safe_load(f)
             return config
 
         # Load in config data from desired config path
-        config = load_config('../config/dICP_config.yaml')
-        config_path = config['setup']['config_path']
         self.config = load_config(config_path)
 
         # Set up ICP parameters
