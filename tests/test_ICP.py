@@ -88,13 +88,14 @@ def test_pt2pt_dICP(source, target, max_iterations, tolerance):
     assert(np.linalg.norm(err_T) < tolerance)
 
     # Check that the transformed source is close to target
-    assert np.allclose(source_transformed[:,:,0].detach().numpy(), target.detach().numpy(), atol=1e-5)
+    assert np.allclose(source_transformed.detach().numpy(), target.detach().numpy(), atol=1e-5)
 
     # Check that the gradient is not none
     T_ts_pred.sum().backward()
 
     # Confirm gradient exists
     assert source.grad is not None and target.grad is not None
+
     # Confirm gradient is not nan
     assert torch.isnan(source.grad).any() == False and torch.isnan(target.grad).any() == False
 
@@ -129,7 +130,7 @@ def test_pt2pl_dICP(source, target, max_iterations, tolerance):
     assert(np.linalg.norm(err_T) < tolerance)
 
     # Check that the transformed source is close to target
-    assert np.allclose(source_transformed[:,:,0].detach().numpy(), target[:,:3].detach().numpy(), atol=1e-5)
+    assert np.allclose(source_transformed.detach().numpy(), target[:,:3].detach().numpy(), atol=1e-5)
 
     # Check that the gradient is not none
     T_ts_pred.sum().backward()
@@ -138,7 +139,7 @@ def test_pt2pl_dICP(source, target, max_iterations, tolerance):
 
 def test_pt2pt_ICP(source, target, max_iterations, tolerance):
     """
-    Test differentiable point-to-point ICP algorithm.
+    Test NON-differentiable point-to-point ICP algorithm.
     """
 
     # Make into tensors
@@ -164,4 +165,4 @@ def test_pt2pt_ICP(source, target, max_iterations, tolerance):
     assert(np.linalg.norm(err_T) < tolerance)
 
     # Check that the transformed source is close to target
-    assert np.allclose(source_transformed[:,:,0].detach().numpy(), target.detach().numpy(), atol=1e-5)
+    assert np.allclose(source_transformed.detach().numpy(), target.detach().numpy(), atol=1e-5)

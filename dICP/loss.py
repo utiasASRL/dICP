@@ -25,7 +25,7 @@ class loss:
         huber_delta = self.metric
         if self.differentiable:
             # Use pseudo huber loss
-            return huber_delta**2 / (huber_delta**2 + err**2)
+            return (huber_delta**2 / (huber_delta**2 + err**2))
         else:
             return torch.where(torch.abs(err) > huber_delta, huber_delta / torch.abs(err), torch.ones_like(err))
 
@@ -42,8 +42,14 @@ class loss:
         Trim loss function
         """
         trim_dist = self.metric
-        if self.differentiable:
-            return 0.5 * torch.tanh(self.tanh_steepness * (trim_dist - torch.linalg.norm(err, axis=1).squeeze()) - 3.0) + 0.5
+        if len(err.shape) == 2:
+            sum_dim = 1
+            shape_tuple = (err.shape[0], 1)
         else:
-            return torch.where(torch.linalg.norm(err, axis=1).reshape(-1, 1) > trim_dist, torch.zeros(err.shape[0], 1), torch.ones(err.shape[0], 1))
+            sum_dim = 2
+            shape_tuple = (err.shape[0], err.shape[1])
+        if self.differentiable:
+            return 0.5 * torch.tanh(self.tanh_steepness * (trim_dist - torch.linalg.norm(err, axis=sum_dim).squeeze()) - 3.0) + 0.5
+        else:
+            return torch.where(torch.linalg.norm(err, axis=sum_dim) > trim_dist, torch.zeros(shape_tuple), torch.ones(shape_tuple))
         

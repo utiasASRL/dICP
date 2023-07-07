@@ -1,11 +1,13 @@
 dICP:
   parameters:
     tanh_steepness: 5.0
+    target_pad_val: 1000 # Value to pad target with for batch composition, 
+                         # want this large enough to never get computed as 
+                         # nearest neighbour for source
     const_iter: True  # If true, force a constant number of iterations as defined by max_iter
   
   functionality:
-    sparse: True
     svd: False  # If true, use SVD to solve pt2pt problem, no effect for pt2pl
 
   logging:
-    verbose: False
+    verbose: True
