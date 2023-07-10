@@ -392,7 +392,7 @@ class ICP:
                     raise ValueError("target list must contain (m x 3/6) tensors. All tensors must have same number of columns")
                 # If target_i has less points than max points in batch, pad with zeros and add
                 if target_i.shape[0] < target_batch.shape[1]:
-                    pad_i = target_pad*torch.ones((target_batch.shape[1] - target_i.shape[0], 3), dtype=pt_dtype, device=pt_device)
+                    pad_i = target_pad*torch.ones((target_batch.shape[1] - target_i.shape[0], target_batch.shape[2]), dtype=pt_dtype, device=pt_device)
                     target_i = torch.vstack((target_i, pad_i))
                     target_batch = torch.vstack((target_batch, target_i.unsqueeze(0)))
                 # If target_i has more points than max points in batch, pad batch with zeros and add
