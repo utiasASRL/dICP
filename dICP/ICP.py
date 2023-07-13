@@ -277,7 +277,7 @@ class ICP:
             
             # Compute weighted Jacobian and error, this avoids having to form a weight matrix
             # which can be memory expensive
-            w_sqrt = torch.sqrt(w)
+            w_sqrt = torch.sqrt(w + 1.0e-10)
             err_w = w_sqrt.unsqueeze(-1) * err
             J_w = w_sqrt.unsqueeze(-1) * J
 
