@@ -334,14 +334,54 @@ class ICP:
         # Also want to return a weight vector for each point in source, with a weight of 1 if
         # the point is not a padded point and 0 if it is a padded point
         
-        pt_device = source[0].device
-        pt_dtype = source[0].dtype
+        # Handle case where source may be list with an empty tensor
+        pt_device = "cpu"
+        pt_dtype = torch.float32
+        phony_pc = False
+        if source is None or target is None:
+            phony_pc = True
+        elif len(source) == 0 or len(target) == 0:
+            phony_pc = True
+        if phony_pc:
+            # This will only trigger is entire source or target is None
+            # Form phony pointclouds with 0 weights
+            source_batch = torch.zeros((1, 1, 3), dtype=pt_dtype, device=pt_device)
+            target_batch = torch.zeros((1, 1, 6), dtype=pt_dtype, device=pt_device)
+            T_init_batch = torch.eye(4, dtype=pt_dtype, device=pt_device).unsqueeze(0)
+            w = torch.zeros((1, source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
+            # Fix weights if pt2pt
+            if self.icp_type == 'pt2pt':
+                w = w.repeat_interleave(3, dim=1)
+            return source_batch, target_batch, T_init_batch, w
+        for target_i in target:
+            if target_i is not None:
+                if len(target_i) > 0:
+                    pt_device = target_i.device
+                    pt_dtype = target_i.dtype
+                    break
 
         # First, handle case where source is list of (n_i x 3) tensors
         if isinstance(source, list):
-            source_batch = source[0][:,:3].unsqueeze(0)
-            w = torch.ones((1, source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
-            for source_i in source[1:]:
+            if len(source[0]) == 0:
+                # If empty list, form a phony initial pointcloud with 0 weights
+                #source_batch = torch.zeros((1, 1, 3), dtype=pt_dtype, device=pt_device)
+                source_batch = target[0].unsqueeze(0)
+                source_batch = source_batch[:,:,:3]
+                w = torch.zeros((1, source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
+            else:
+                source_batch = source[0][:,:3].unsqueeze(0)
+                w = torch.ones((1, source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
+            for ii, source_i in enumerate(source[1:]):
+                # Want to handle case where source_i is actually empty tensor
+                zero_w = False
+                if len(source[0]) == 0:
+                    # If empty tensor, form a phony initial pointcloud with 0 weights
+                    #source_i = torch.zeros((1, 3), dtype=pt_dtype, device=pt_device)
+                    source_i = target[ii+1]
+                    source_i = source_i[:,:3]
+                    # Correct the weight vector at the end
+                    zero_w = True
+
                 if len(source_i.shape) != 2 or (source_i.shape[1] != 3 and source_i.shape[1] != 6):
                     raise ValueError("source list must contain (n x 3/6) tensors")
                 # If source_i has less points than max points in batch, pad with zeros and add
@@ -368,6 +408,8 @@ class ICP:
                 else:
                     source_batch = torch.vstack((source_batch, source_i[:, :3].unsqueeze(0)))
                     w_i = torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
+                if zero_w:
+                    w_i = 0.0 * w_i
                 w = torch.cat((w, w_i.unsqueeze(0)), dim=0)        
         # Next, handle case where source is (n x 3)
         elif len(source.shape) == 2 and (source.shape[1] == 3 or source.shape[1] == 6):
@@ -422,7 +464,6 @@ class ICP:
             T_init_batch = T_init
         else:
             raise ValueError("T_init must be (4 x 4) or (N x 4 x 4) or list len(N) (4 x 4)")
-
 
         # As a last step, fix the dimensions of the weight. If pt2pt, then each point will have
         # a 3x1 error. If pt2pl, then each point will have a 1x1 error.
