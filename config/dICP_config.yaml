@@ -10,4 +10,4 @@ dICP:
     svd: False  # If true, use SVD to solve pt2pt problem, no effect for pt2pl
 
   logging:
-    verbose: True
+    verbose: False
