@@ -277,7 +277,8 @@ class ICP:
             
             # Compute weighted Jacobian and error, this avoids having to form a weight matrix
             # which can be memory expensive
-            w_sqrt = torch.sqrt(w + 1.0e-10)
+            # We add and subtract 1e-5 to avoid sqrt(0) nan gradients
+            w_sqrt = torch.sqrt(w + 1.0e-10) - 1.0e-5
             err_w = w_sqrt.unsqueeze(-1) * err
             J_w = w_sqrt.unsqueeze(-1) * J
 
@@ -358,14 +359,19 @@ class ICP:
                 if len(target_i) > 0:
                     pt_device = target_i.device
                     pt_dtype = target_i.dtype
+                    if isinstance(target, list):
+                        target_dim = target_i.shape[1]
+                    elif len(target.shape) == 2:
+                        target_dim = target_i.shape[0]
+                    else:
+                        target_dim = target_i.shape[1]
                     break
 
         # First, handle case where source is list of (n_i x 3) tensors
         if isinstance(source, list):
             if len(source[0]) == 0:
                 # If empty list, form a phony initial pointcloud with 0 weights
-                #source_batch = torch.zeros((1, 1, 3), dtype=pt_dtype, device=pt_device)
-                source_batch = target[0].unsqueeze(0)
+                source_batch = torch.zeros((1, 1, 3), dtype=pt_dtype, device=pt_device)
                 source_batch = source_batch[:,:,:3]
                 w = torch.zeros((1, source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
             else:
@@ -374,14 +380,11 @@ class ICP:
             for ii, source_i in enumerate(source[1:]):
                 # Want to handle case where source_i is actually empty tensor
                 zero_w = False
-                if len(source[0]) == 0:
+                if len(source_i) == 0:
                     # If empty tensor, form a phony initial pointcloud with 0 weights
-                    #source_i = torch.zeros((1, 3), dtype=pt_dtype, device=pt_device)
-                    source_i = target[ii+1]
-                    source_i = source_i[:,:3]
+                    source_i = torch.zeros((1, 3), dtype=pt_dtype, device=pt_device)
                     # Correct the weight vector at the end
                     zero_w = True
-
                 if len(source_i.shape) != 2 or (source_i.shape[1] != 3 and source_i.shape[1] != 6):
                     raise ValueError("source list must contain (n x 3/6) tensors")
                 # If source_i has less points than max points in batch, pad with zeros and add
@@ -426,10 +429,22 @@ class ICP:
         # selected as closest point. Take the max of the source point cloud and multiply by target_pad_val
         # First, handle case where target is list of (m_i x 3/6) tensors
         if isinstance(target, list):
-            target_batch = target[0].unsqueeze(0)
-            target_dim = target[0].shape[1]
+            if len(target[0]) == 0:
+                # If empty list, form a phony initial pointcloud
+                target_batch = torch.zeros((1, 1, target_dim), dtype=pt_dtype, device=pt_device)
+                # Zero out weights from corresponding source pointcloud
+                w[0,:] = 0.0
+            else:
+                target_batch = target[0].unsqueeze(0)
+            #target_dim = target[0].shape[1]
             target_pad = torch.max(source_batch) * self.target_pad_val
-            for target_i in target[1:]:
+            for ii, target_i in enumerate(target[1:]):
+                # Want to handle case where target_i is actually empty tensor
+                if len(target_i) == 0:
+                    # If empty tensor, form a phony initial pointcloud with 0 weights
+                    target_i = torch.zeros((1, target_dim), dtype=pt_dtype, device=pt_device)
+                    # Zero out weights from corresponding source pointcloud
+                    w[ii+1,:] = 0.0
                 if len(target_i.shape) != 2 or target_i.shape[1] != target_dim:
                     raise ValueError("target list must contain (m x 3/6) tensors. All tensors must have same number of columns")
                 # If target_i has less points than max points in batch, pad with zeros and add
