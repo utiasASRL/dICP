@@ -138,3 +138,60 @@ def test_zero_inputs(source, target, max_iterations, tolerance):
     # Since we have empty source/target, the transformation should return initial guess
     assert(np.linalg.norm(T_ts_pred_array.detach().numpy() - T_init_stack.detach().numpy()) < tolerance)
     assert(np.linalg.norm(T_ts_pred_batch.detach().numpy() - T_init_stack.detach().numpy()) < tolerance)
+
+def test_weight_inputs(source, target, max_iterations, tolerance):
+    """
+    Test differentiable point-to-point ICP algorithm.
+    """
+
+    # Make into tensors
+    source_1 = torch.tensor(source[:,:3], requires_grad=True)
+    target_1 = torch.tensor(target, requires_grad=True)
+    weight_1 = None
+
+    source_2 = torch.tensor(source[:,:3], requires_grad=True)
+    target_2 = torch.tensor(target[:,:], requires_grad=True)
+    weight_2 = torch.tensor(np.ones((target_2.shape[0])), requires_grad=True)
+
+    # Add 10 random points to source with weights of 0
+    source_3 = torch.tensor(np.vstack((source[:,:3], np.random.rand(10,3))), requires_grad=True)
+    target_3 = torch.tensor(target[:,:], requires_grad=True)
+    weight_3 = torch.tensor(np.hstack((np.ones((target_3.shape[0])), np.zeros((10)))), requires_grad=True)
+
+    source_list = [source_1, source_2, source_3]
+    target_list = [target_1, target_2, target_3]
+    weight_list = [weight_1, weight_2, weight_3]
+
+    test_type = source_1.dtype
+
+    T_init_1 = torch.eye(4, dtype=test_type)
+    T_init_2 = torch.eye(4, dtype=test_type)
+    T_init_3 = torch.eye(4, dtype=test_type)
+
+    T_init_list = [T_init_1, T_init_2, T_init_3]
+    T_init_stack = torch.stack(T_init_list)
+    
+    # Set up loss function
+    loss_fn = {"name": "huber", "metric": 1.0}
+    pt2pt_dICP = ICP(icp_type='pt2pl', differentiable=True, max_iterations=max_iterations, tolerance=tolerance)
+
+    # First, test with a single point cloud in loop
+    T_ts_pred_array = torch.tensor(np.zeros((len(source_list),4,4)), dtype=test_type)
+    for ii in range(len(source_list)):
+        source = source_list[ii]
+        target = target_list[ii]
+        T_init = T_init_list[ii]
+        weight = weight_list[ii]
+        
+        # Run ICP
+        _, T_ts_pred = pt2pt_dICP.icp(source, target, T_init, weight=weight, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+
+        T_ts_pred_array[ii,:,:] = T_ts_pred
+
+    _, T_ts_pred_batch = pt2pt_dICP.icp(source_list, target_list, T_init_stack, weight=weight_list, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+
+    # Check that passing weight as list returns same result as individual eval
+    assert(np.linalg.norm(T_ts_pred_batch.detach().numpy() - T_ts_pred_array.detach().numpy()) < tolerance)
+    # Check that all 3 transformations are the same, since the used points should all be the same
+    assert(np.linalg.norm(T_ts_pred_array[0,:,:].detach().numpy() - T_ts_pred_array[1,:,:].detach().numpy()) < tolerance)
+    assert(np.linalg.norm(T_ts_pred_array[0,:,:].detach().numpy() - T_ts_pred_array[2,:,:].detach().numpy()) < tolerance)

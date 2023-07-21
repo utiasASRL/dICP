@@ -32,8 +32,8 @@ class ICP:
 
         self.nn = nn(self.diff)
 
-    def icp(self, source, target, T_init, trim_dist=None, loss_fn=None, dim=3):
-        return self.dICP(source, target, T_init, trim_dist, loss_fn, dim)
+    def icp(self, source, target, T_init, weight=None, trim_dist=None, loss_fn=None, dim=3):
+        return self.dICP(source, target, T_init, weight, trim_dist, loss_fn, dim)
         #return self.dICP_single(source, target, T_init, trim_dist, loss_fn, dim)
     
         if self.diff:
@@ -167,7 +167,7 @@ class ICP:
 
         return ps_s, T_ts
 
-    def dICP(self, source, target, T_init, trim_dist=None, loss_fn=None, dim=3):
+    def dICP(self, source, target, T_init, weight=None, trim_dist=None, loss_fn=None, dim=3):
         """
         Point-to-plane ICP algorithm. Note, source and target pointclouds at each
         batch may be of different sizes. This is dealth with.
@@ -193,7 +193,7 @@ class ICP:
         # source is now a tensor of shape (N, n, 3)
         # target is now a tensor of shape (N, m, 3)
         # T_init is now a tensor of shape (N, 4, 4)
-        source, target, T_init, w_init = self.batch_size_handling(source, target, T_init)
+        source, target, T_init, w_init = self.batch_size_handling(source, target, T_init, weight)
         N = source.shape[0]
 
         # Confirm that source, target, and T_init types match
@@ -326,17 +326,28 @@ class ICP:
 
         return ps_t_final, T_ts
 
-    def batch_size_handling(self, source, target, T_init):
+    def batch_size_handling(self, source, target, T_init, weight=None):
         """
         Properly transforms inputs to do ICP for entire batch at once. Note, source and
         target pointclouds at each batch may be different. This is dealt with.
         :param source: Source point cloud (n x 3) or (N x n x 3) or list len(N) (n_N x 3).
         :param target: Target point cloud (m x 3) or (N x m x 3) or list len(N) (m_N x 3).
         :param T_init: Initial transformation (4 x 4) or (N x 4 x 4) or list len(N) (4 x 4).
+        :param weight: Weight vector (n) or (N x n) or list len(N) (n_N).
         """
         # Deal with source. If source has 6 columns (x,y,z,norm_x,norm_y,norm_z), remove normals
         # Also want to return a weight vector for each point in source, with a weight of 1 if
-        # the point is not a padded point and 0 if it is a padded point
+        # the point is not a padded point and 0 if it is a padded point. If weight is not None,
+        # then we want to use the provided weight vector insteas of 1.
+
+        # Check that if weight is not None, that is has same dimensions as source point
+        prior_w = False
+        if weight is not None:
+            prior_w = True
+            if isinstance(source, list):
+                assert len(source) == len(weight), "weight must be list of same length as source"
+            else:
+                assert source.shape[0] == weight.shape[0], "weight must have same number of rows as source"
         
         # Handle case where source may be list with an empty tensor
         pt_device = "cpu"
@@ -379,7 +390,12 @@ class ICP:
                 w = torch.zeros((1, source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
             else:
                 source_batch = source[0][:,:3].unsqueeze(0)
-                w = torch.ones((1, source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
+                w_prior = torch.ones(source[0].shape[0], dtype=pt_dtype, device=pt_device)
+                if prior_w:
+                    if weight[0] is not None:
+                        assert len(weight[0]) == source[0].shape[0], "weight must have same number of rows as source"
+                        w_prior = weight[0]
+                w = w_prior*torch.ones((1, source[0].shape[0]), dtype=pt_dtype, device=pt_device)
             for ii, source_i in enumerate(source[1:]):
                 # Want to handle case where source_i is actually empty tensor
                 zero_w = False
@@ -393,7 +409,12 @@ class ICP:
                 # If source_i has less points than max points in batch, pad with zeros and add
                 if source_i.shape[0] < source_batch.shape[1]:
                     # Compute weight vector
-                    w_i_ones = torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
+                    w_prior = torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
+                    if prior_w:
+                        if weight[ii+1] is not None:
+                            assert len(weight[ii+1]) == source_i.shape[0], "weight must have same number of rows as source"
+                            w_prior = weight[ii+1]
+                    w_i_ones = w_prior*torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
                     w_i_zeros = torch.zeros(source_batch.shape[1] - source_i.shape[0], dtype=pt_dtype, device=pt_device)
                     w_i = torch.hstack((w_i_ones, w_i_zeros))
                     # Update source_i with zeros
@@ -402,7 +423,12 @@ class ICP:
                 # If source_i has more points than max points in batch, pad batch with zeros and add
                 elif source_i.shape[0] > source_batch.shape[1]:
                     # Compute weight vector
-                    w_i = torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
+                    w_prior = torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
+                    if prior_w:
+                        if weight[ii+1] is not None:
+                            assert len(weight[ii+1]) == source_i.shape[0], "weight must have same number of rows as source"
+                            w_prior = weight[ii+1]
+                    w_i = w_prior*torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
                     # Update w with zeros
                     w = torch.hstack((w, torch.zeros((w.shape[0], source_i.shape[0] - source_batch.shape[1]), dtype=pt_dtype, device=pt_device) ))
                     # Update source_batch with zeros
@@ -413,18 +439,29 @@ class ICP:
                 # If source_i has same number of points as max points in batch, just add
                 else:
                     source_batch = torch.vstack((source_batch, source_i[:, :3].unsqueeze(0)))
-                    w_i = torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
+                    w_prior = torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
+                    if prior_w:
+                        if weight[ii+1] is not None:
+                            assert len(weight[ii+1]) == source_i.shape[0], "weight must have same number of rows as source"
+                            w_prior = weight[ii+1]
+                    w_i = w_prior*torch.ones(source_i.shape[0], dtype=pt_dtype, device=pt_device)
                 if zero_w:
                     w_i = 0.0 * w_i
                 w = torch.cat((w, w_i.unsqueeze(0)), dim=0)        
         # Next, handle case where source is (n x 3)
         elif len(source.shape) == 2 and (source.shape[1] == 3 or source.shape[1] == 6):
             source_batch = source[:, :3].unsqueeze(0)
-            w = torch.ones((1, source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
+            if weight is None:
+                w = torch.ones((1, source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
+            else:
+                w = weight.unsqueeze(0)
         # Finally, handle case where source is (N x n x 3)
         elif len(source.shape) == 3 and (source.shape[2] == 3 or source.shape[2] == 6):
             source_batch = source[:, :, :3]
-            w = torch.ones((source_batch.shape[0], source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
+            if weight is None:
+                w = torch.ones((source_batch.shape[0], source_batch.shape[1]), dtype=pt_dtype, device=pt_device)
+            else:
+                w = weight
         else:
             raise ValueError("source must be (n x 3/6) or (N x n x 3/6) or list len(N) (n_N x 3/6)")
         
