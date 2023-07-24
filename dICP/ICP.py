@@ -326,7 +326,7 @@ class ICP:
 
         return ps_t_final, T_ts
 
-    def batch_size_handling(self, source, target, T_init, weight=None):
+    def batch_size_handling(self, source, target, T_init=None, weight=None):
         """
         Properly transforms inputs to do ICP for entire batch at once. Note, source and
         target pointclouds at each batch may be different. This is dealt with.
@@ -511,14 +511,17 @@ class ICP:
             raise ValueError("target must be (m x 3/6) or (N x m x 3/6) or list len(N) (m_N x 3/6)")
 
         # Deal with T_init
-        if isinstance(T_init, list):
-            T_init_batch = torch.stack(T_init, dim=0)
-        elif T_init.shape == (4,4):
-            T_init_batch = T_init.unsqueeze(0)
-        elif len(T_init.shape) == 3 and T_init.shape[1:] == (4,4):
-            T_init_batch = T_init
+        if T_init is not None:
+            if isinstance(T_init, list):
+                T_init_batch = torch.stack(T_init, dim=0)
+            elif T_init.shape == (4,4):
+                T_init_batch = T_init.unsqueeze(0)
+            elif len(T_init.shape) == 3 and T_init.shape[1:] == (4,4):
+                T_init_batch = T_init
+            else:
+                raise ValueError("T_init must be (4 x 4) or (N x 4 x 4) or list len(N) (4 x 4)")
         else:
-            raise ValueError("T_init must be (4 x 4) or (N x 4 x 4) or list len(N) (4 x 4)")
+            T_init_batch = None
 
         # As a last step, fix the dimensions of the weight. If pt2pt, then each point will have
         # a 3x1 error. If pt2pl, then each point will have a 1x1 error.
