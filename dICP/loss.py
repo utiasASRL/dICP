@@ -51,5 +51,7 @@ class loss:
         if self.differentiable:
             return 0.5 * torch.tanh(self.tanh_steepness * (trim_dist - torch.linalg.norm(err, axis=sum_dim).squeeze()) - 3.0) + 0.5
         else:
-            return torch.where(torch.linalg.norm(err, axis=sum_dim) > trim_dist, torch.zeros(shape_tuple), torch.ones(shape_tuple))
+            zeros_option = torch.zeros(shape_tuple, dtype=err.dtype, device=err.device)
+            ones_option = torch.ones(shape_tuple, dtype=err.dtype, device=err.device)
+            return torch.where(torch.linalg.norm(err, axis=sum_dim) > trim_dist, zeros_option, ones_option)
         
