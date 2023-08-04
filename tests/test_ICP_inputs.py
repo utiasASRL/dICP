@@ -29,7 +29,7 @@ def source():
 def target():
     return np.load('../data/points_map.npy')
 
-def test_diff_inputs(source, target, max_iterations, tolerance):
+def test_input_types(source, target, max_iterations, tolerance):
     """
     Test differentiable point-to-point ICP algorithm.
     """
@@ -195,3 +195,42 @@ def test_weight_inputs(source, target, max_iterations, tolerance):
     # Check that all 3 transformations are the same, since the used points should all be the same
     assert(np.linalg.norm(T_ts_pred_array[0,:,:].detach().numpy() - T_ts_pred_array[1,:,:].detach().numpy()) < tolerance)
     assert(np.linalg.norm(T_ts_pred_array[0,:,:].detach().numpy() - T_ts_pred_array[2,:,:].detach().numpy()) < tolerance)
+
+
+def test_diff_vs_nondiff_types(source, target, max_iterations, tolerance):
+    """
+    Test differentiable point-to-point ICP algorithm.
+    """
+
+    # Make into tensors
+    source_1 = torch.tensor(source[:50,:3], requires_grad=True)
+    target_1 = torch.tensor(target[:55,:], requires_grad=True)
+    T_init_1 = torch.eye(4, dtype=source_1.dtype)
+
+    # Check huber and pt2pl
+    loss_fn = {"name": "huber", "metric": 1.0}
+    trim_dist = 5.0
+    pt2pt_dICP_diff = ICP(icp_type='pt2pl', differentiable=True, max_iterations=max_iterations, tolerance=tolerance)
+    pt2pt_dICP_nondiff = ICP(icp_type='pt2pl', differentiable=False, max_iterations=max_iterations, tolerance=tolerance)
+
+    # First, test with a single point cloud in loop
+    _, T_ts_diff = pt2pt_dICP_diff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+    _, T_ts_nondiff = pt2pt_dICP_nondiff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+
+    # Check that the transformation is correct
+    err_T = se3op.tran2vec(T_ts_diff.detach().numpy() @ np.linalg.inv(T_ts_nondiff.detach().numpy()))
+    assert(np.linalg.norm(err_T) < tolerance)
+
+    # Check cauchy and pt2pt
+    loss_fn = {"name": "cauchy", "metric": 0.5}
+    trim_dist = 5.0
+    pt2pl_dICP_diff = ICP(icp_type='pt2pl', differentiable=True, max_iterations=max_iterations, tolerance=tolerance)
+    pt2pl_dICP_nondiff = ICP(icp_type='pt2pl', differentiable=False, max_iterations=max_iterations, tolerance=tolerance)
+
+    # First, test with a single point cloud in loop
+    _, T_ts_diff = pt2pl_dICP_diff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+    _, T_ts_nondiff = pt2pl_dICP_nondiff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+
+    # Check that the transformation is correct
+    err_T = se3op.tran2vec(T_ts_diff.detach().numpy() @ np.linalg.inv(T_ts_nondiff.detach().numpy()))
+    assert(np.linalg.norm(err_T) < tolerance)
