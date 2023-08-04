@@ -187,6 +187,7 @@ class ICP:
                         loss_fn = {"name": "[huber/cauchy]", "metric": FLOAT_NUMBER}
                         If None, no loss function used.
         :return: Transformed source point cloud and transformation from source to target T_ts.
+                 deltas: list of deltas over the iterations, tensor of shape (B, # of ICP iters, 6, 1)
         """
         # Handle batch sizing for various possible inputs
         # This also trims the source pointcloud to dim 3
@@ -195,6 +196,8 @@ class ICP:
         # T_init is now a tensor of shape (N, 4, 4)
         source, target, T_init, w_init = self.batch_size_handling(source, target, T_init, weight)
         N = source.shape[0]
+
+        deltas = []
 
         # Confirm that source, target, and T_init types match
         assert source.dtype == target.dtype == T_init.dtype
@@ -306,6 +309,7 @@ class ICP:
             r_st_t_new = r_st_t - del_r
             r_st_t = r_st_t_new
 
+            deltas.append(del_T_ts.detach())
             # Check for convergence if not constant iterations
             # TODO: Do better convergence check per N dimension
             if torch.linalg.norm(del_T_ts.detach()) < self.tolerance and not self.const_iter:
@@ -324,7 +328,9 @@ class ICP:
         T_ts[:, 0:3, 0:3] = C_ts
         T_ts[:, 0:3, 3] = r_st_t.squeeze(-1)
 
-        return ps_t_final, T_ts
+        deltas = torch.stack(deltas, dim=1) # new shape (B, # of icp iters, 6, 1)
+
+        return ps_t_final, T_ts, deltas
 
     def batch_size_handling(self, source, target, T_init=None, weight=None):
         """

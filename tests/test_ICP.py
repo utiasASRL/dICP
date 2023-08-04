@@ -46,8 +46,7 @@ def aatest_pt2pt_kdICP(source, target, max_iterations, tolerance):
 
     # Run ICP
     pt2pt_ICP = ICP(icp_type='pt2pt', differentiable = False, max_iterations=max_iterations, tolerance=tolerance)
-    source_transformed, T_ts_pred = pt2pt_ICP.icp(source_tree, target_tree, T_init)
-
+    source_transformed, T_ts_pred, _ = pt2pt_ICP.icp(source_tree, target_tree, T_init)
     # Plot results
     #target_tree.plot_overlay(source_tree)
     #target_tree.plot_overlay(source_transformed)
@@ -78,8 +77,7 @@ def test_pt2pt_dICP(source, target, max_iterations, tolerance):
 
     # Run ICP
     pt2pt_dICP = ICP(icp_type='pt2pt', differentiable=True, max_iterations=max_iterations, tolerance=tolerance)
-    source_transformed, T_ts_pred = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
-
+    source_transformed, T_ts_pred, _ = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
     # Plot results
     #plot_overlay(source_transformed.detach().numpy(), target.detach().numpy(), file_name='pt2pt_dICP.png')
 
@@ -120,7 +118,7 @@ def test_pt2pl_dICP(source, target, max_iterations, tolerance):
 
     # Run ICP
     pt2pl_dICP = ICP(icp_type='pt2pl', differentiable = True, max_iterations=max_iterations, tolerance=tolerance)
-    source_transformed, T_ts_pred = pt2pl_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+    source_transformed, T_ts_pred, _ = pt2pl_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
 
     # Plot results
     #plot_overlay(source_transformed[:,:,0].detach().numpy(), target.detach().numpy(), file_name='pt2pl_dICP.png')
@@ -158,7 +156,7 @@ def test_pt2pt_ICP(source, target, max_iterations, tolerance):
 
     # Run ICP
     pt2pt_ICP = ICP(icp_type='pt2pt', differentiable=False, max_iterations=max_iterations, tolerance=tolerance)
-    source_transformed, T_ts_pred = pt2pt_ICP.icp(source, target, T_init, trim_dist=5.0, loss_fn = loss_fn, dim=2)
+    source_transformed, T_ts_pred, _ = pt2pt_ICP.icp(source, target, T_init, trim_dist=5.0, loss_fn = loss_fn, dim=2)
 
     # Check that the transformation is correct
     err_T = se3op.tran2vec(T_ts_true @ np.linalg.inv(T_ts_pred.detach().numpy()))

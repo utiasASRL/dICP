@@ -75,7 +75,7 @@ def test_diff_inputs(source, target, max_iterations, tolerance):
         T_init = T_init_list[ii]
         
         # Run ICP
-        source_transformed, T_ts_pred = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+        source_transformed, T_ts_pred, _ = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
 
         source_transformed_list.append(source_transformed)
         T_ts_pred_array[ii,:,:] = T_ts_pred
@@ -84,7 +84,7 @@ def test_diff_inputs(source, target, max_iterations, tolerance):
     time_loop = toc - tic
     # Now pass as batch
     tic = time.time()
-    source_transformed_batch, T_ts_pred_batch = pt2pt_dICP.icp(source_list, target_list, T_init_stack, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+    source_transformed_batch, T_ts_pred_batch, _ = pt2pt_dICP.icp(source_list, target_list, T_init_stack, trim_dist=5.0, loss_fn=loss_fn, dim=2)
     toc = time.time()
 
     time_batch = toc - tic
@@ -129,11 +129,11 @@ def test_zero_inputs(source, target, max_iterations, tolerance):
         T_init = T_init_list[ii]
         
         # Run ICP
-        _, T_ts_pred = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+        _, T_ts_pred, _ = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
 
         T_ts_pred_array[ii,:,:] = T_ts_pred
 
-    _, T_ts_pred_batch = pt2pt_dICP.icp(source_list, target_list, T_init_stack, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+    _, T_ts_pred_batch, _ = pt2pt_dICP.icp(source_list, target_list, T_init_stack, trim_dist=5.0, loss_fn=loss_fn, dim=2)
 
     # Since we have empty source/target, the transformation should return initial guess
     assert(np.linalg.norm(T_ts_pred_array.detach().numpy() - T_init_stack.detach().numpy()) < tolerance)
@@ -184,11 +184,11 @@ def test_weight_inputs(source, target, max_iterations, tolerance):
         weight = weight_list[ii]
         
         # Run ICP
-        _, T_ts_pred = pt2pt_dICP.icp(source, target, T_init, weight=weight, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+        _, T_ts_pred, _ = pt2pt_dICP.icp(source, target, T_init, weight=weight, trim_dist=5.0, loss_fn=loss_fn, dim=2)
 
         T_ts_pred_array[ii,:,:] = T_ts_pred
 
-    _, T_ts_pred_batch = pt2pt_dICP.icp(source_list, target_list, T_init_stack, weight=weight_list, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+    _, T_ts_pred_batch, _ = pt2pt_dICP.icp(source_list, target_list, T_init_stack, weight=weight_list, trim_dist=5.0, loss_fn=loss_fn, dim=2)
 
     # Check that passing weight as list returns same result as individual eval
     assert(np.linalg.norm(T_ts_pred_batch.detach().numpy() - T_ts_pred_array.detach().numpy()) < tolerance)
