@@ -202,11 +202,6 @@ class ICP:
         # Confirm that source, target, and T_init types match
         assert source.dtype == target.dtype == T_init.dtype
 
-        #source = source.squeeze(0)
-        #target = target.squeeze(0)
-        #T_init = T_init.squeeze(0)
-        #w_init = w_init.squeeze(0)
-
         if self.icp_type == 'pt2pl':
             # Confirm that normals for target exist
             assert target.shape[2] == 6
@@ -311,9 +306,15 @@ class ICP:
 
             deltas.append(del_T_ts.detach())
             # Check for convergence if not constant iterations
-            # TODO: Do better convergence check per N dimension
-            if torch.linalg.norm(del_T_ts.detach()) < self.tolerance and not self.const_iter:
-                break
+            del_T_ts_norm = torch.linalg.norm(del_T_ts, axis=1).detach().squeeze(-1)
+            if any(del_T_ts_norm < self.tolerance) and not self.const_iter:
+                # If any del_T_ts is below tolerance, zero out the corresponding
+                # weights to prevent further updating
+                # This ensures that batch solution is identical to single solution
+                w_conv_fact = torch.where(del_T_ts_norm < self.tolerance, torch.zeros_like(del_T_ts_norm), torch.ones_like(del_T_ts_norm))
+                w_init = w_init * w_conv_fact.unsqueeze(-1)
+                if all(del_T_ts_norm < self.tolerance):
+                    break
 
         if self.verbose:
             print("ICP converged in {} iterations".format(ii+1))
