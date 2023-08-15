@@ -66,7 +66,6 @@ def test_input_types(source, target, max_iterations, tolerance):
     pt2pt_dICP = ICP(icp_type='pt2pl', differentiable=True, max_iterations=max_iterations, tolerance=tolerance)
 
     # First, test with a single point cloud in loop
-    source_transformed_list = []
     T_ts_pred_array = torch.tensor(np.zeros((3,4,4)), dtype=test_type)
     tic = time.time()
     for ii in range(3):
@@ -75,16 +74,17 @@ def test_input_types(source, target, max_iterations, tolerance):
         T_init = T_init_list[ii]
         
         # Run ICP
-        source_transformed, T_ts_pred, _ = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+        icp_results = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+        T_ts_pred = icp_results['T']
 
-        source_transformed_list.append(source_transformed)
         T_ts_pred_array[ii,:,:] = T_ts_pred
     
     toc = time.time()
     time_loop = toc - tic
     # Now pass as batch
     tic = time.time()
-    source_transformed_batch, T_ts_pred_batch, _ = pt2pt_dICP.icp(source_list, target_list, T_init_stack, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+    icp_results = pt2pt_dICP.icp(source_list, target_list, T_init_stack, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+    T_ts_pred_batch = icp_results['T']
     toc = time.time()
 
     time_batch = toc - tic
@@ -130,12 +130,11 @@ def test_zero_inputs(source, target, max_iterations, tolerance):
         T_init = T_init_list[ii]
         
         # Run ICP
-        _, T_ts_pred, _ = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+        icp_results = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+        T_ts_pred_array[ii,:,:] = icp_results['T']
 
-        T_ts_pred_array[ii,:,:] = T_ts_pred
-
-    _, T_ts_pred_batch, _ = pt2pt_dICP.icp(source_list, target_list, T_init_stack, trim_dist=5.0, loss_fn=loss_fn, dim=2)
-
+    icp_results = pt2pt_dICP.icp(source_list, target_list, T_init_stack, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+    T_ts_pred_batch = icp_results['T']
     # Since we have empty source/target, the transformation should return initial guess
     assert(np.linalg.norm(T_ts_pred_array.detach().numpy() - T_init_stack.detach().numpy()) < tolerance)
     assert(np.linalg.norm(T_ts_pred_batch.detach().numpy() - T_init_stack.detach().numpy()) < tolerance)
@@ -185,12 +184,11 @@ def test_weight_inputs(source, target, max_iterations, tolerance):
         weight = weight_list[ii]
         
         # Run ICP
-        _, T_ts_pred, _ = pt2pt_dICP.icp(source, target, T_init, weight=weight, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+        icp_results = pt2pt_dICP.icp(source, target, T_init, weight=weight, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+        T_ts_pred_array[ii,:,:] = icp_results['T']
 
-        T_ts_pred_array[ii,:,:] = T_ts_pred
-
-    _, T_ts_pred_batch, _ = pt2pt_dICP.icp(source_list, target_list, T_init_stack, weight=weight_list, trim_dist=5.0, loss_fn=loss_fn, dim=2)
-
+    icp_results = pt2pt_dICP.icp(source_list, target_list, T_init_stack, weight=weight_list, trim_dist=5.0, loss_fn=loss_fn, dim=2)
+    T_ts_pred_batch = icp_results['T']
     # Check that passing weight as list returns same result as individual eval
     assert(np.linalg.norm(T_ts_pred_batch.detach().numpy() - T_ts_pred_array.detach().numpy()) < tolerance)
     # Check that all 3 transformations are the same, since the used points should all be the same
@@ -214,9 +212,10 @@ def test_diff_vs_nondiff_types(source, target, max_iterations, tolerance):
     pt2pt_dICP_nondiff = ICP(icp_type='pt2pl', differentiable=False, max_iterations=max_iterations, tolerance=tolerance)
 
     # First, test with a single point cloud in loop
-    _, T_ts_diff, _ = pt2pt_dICP_diff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
-    _, T_ts_nondiff, _ = pt2pt_dICP_nondiff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
-
+    icp_results_diff = pt2pt_dICP_diff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+    icp_results_nondiff = pt2pt_dICP_nondiff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+    T_ts_diff = icp_results_diff['T']
+    T_ts_nondiff = icp_results_nondiff['T']
     # Check that the transformation is correct
     err_T = se3op.tran2vec(T_ts_diff.detach().numpy() @ np.linalg.inv(T_ts_nondiff.detach().numpy()))
     assert(np.linalg.norm(err_T) < tolerance)
@@ -228,8 +227,10 @@ def test_diff_vs_nondiff_types(source, target, max_iterations, tolerance):
     pt2pl_dICP_nondiff = ICP(icp_type='pt2pl', differentiable=False, max_iterations=max_iterations, tolerance=tolerance)
 
     # First, test with a single point cloud in loop
-    _, T_ts_diff, _ = pt2pl_dICP_diff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
-    _, T_ts_nondiff, _ = pt2pl_dICP_nondiff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+    icp_results_diff = pt2pl_dICP_diff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+    icp_results_nondiff = pt2pl_dICP_nondiff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+    T_ts_diff = icp_results_diff['T']
+    T_ts_nondiff = icp_results_nondiff['T']
 
     # Check that the transformation is correct
     err_T = se3op.tran2vec(T_ts_diff.detach().numpy() @ np.linalg.inv(T_ts_nondiff.detach().numpy()))

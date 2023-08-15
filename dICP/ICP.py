@@ -196,8 +196,8 @@ class ICP:
         # T_init is now a tensor of shape (N, 4, 4)
         source, target, T_init, w_init = self.batch_size_handling(source, target, T_init, weight)
         N = source.shape[0]
-
         deltas = []
+        weights = []
 
         # Confirm that source, target, and T_init types match
         assert source.dtype == target.dtype == T_init.dtype
@@ -304,7 +304,10 @@ class ICP:
             r_st_t_new = r_st_t - del_r
             r_st_t = r_st_t_new
 
+            # Save returns 
             deltas.append(del_T_ts.detach())
+            weights.append(w.detach().unsqueeze(-1))
+
             # Check for convergence if not constant iterations
             del_T_ts_norm = torch.linalg.norm(del_T_ts, axis=1).detach().squeeze(-1)
             if any(del_T_ts_norm < self.tolerance) and not self.const_iter:
@@ -330,8 +333,16 @@ class ICP:
         T_ts[:, 0:3, 3] = r_st_t.squeeze(-1)
 
         deltas = torch.stack(deltas, dim=1) # new shape (B, # of icp iters, 6, 1)
+        weights = torch.stack(weights, dim=1) # new shape (B, # of icp iters, n, 1)
 
-        return ps_t_final, T_ts, deltas
+        icp_results = {
+            "pc": ps_t_final,
+            "T": T_ts,
+            "deltas": deltas,
+            "weights": weights
+        }
+
+        return icp_results
 
     def batch_size_handling(self, source, target, T_init=None, weight=None):
         """
