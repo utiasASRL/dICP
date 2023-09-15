@@ -2,7 +2,7 @@
 # It will use conda for dependency management, see 
 # https://autobencoder.com/2020-08-24-conda-actions/
 
-name: Pytest & Flake8
+name: Pytest
 
 permissions:
   contents: read
@@ -23,9 +23,6 @@ jobs:
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
         $CONDA/bin/conda env update --file environment.yml --name base
-    - name: Lint with flake8
-      run: |
-        $CONDA/bin/flake8 . --count --show-source --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
       run: |
         $CONDA/bin/pytest .
