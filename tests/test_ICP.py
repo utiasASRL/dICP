@@ -4,6 +4,7 @@
 import pytest
 import numpy as np
 import torch
+import os
 torch.set_printoptions(precision=8)
 from dICP.ICP import ICP
 from dICP.visualization import plot_overlay
@@ -21,11 +22,15 @@ def tolerance():
 
 @pytest.fixture
 def source():
-    return np.load('data/points_scan.npy')
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    data_file_path = os.path.join(current_dir, 'data', 'points_scan.npy')
+    return np.load(data_file_path)
 
 @pytest.fixture
 def target():
-    return np.load('data/points_map.npy')
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    data_file_path = os.path.join(current_dir, 'data', 'points_map.npy')
+    return np.load(data_file_path)
 
 def test_pt2pt_dICP(source, target, max_iterations, tolerance):
     """

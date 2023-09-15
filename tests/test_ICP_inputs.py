@@ -10,7 +10,8 @@ from dICP.visualization import plot_overlay
 from pylgmath import se3op
 import matplotlib.pyplot as plt
 from pylgmath import Transformation
-import time 
+import time
+import os
 
 @pytest.fixture
 def max_iterations():
@@ -22,11 +23,15 @@ def tolerance():
 
 @pytest.fixture
 def source():
-    return np.load('data/points_scan.npy')
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    data_file_path = os.path.join(current_dir, 'data', 'points_scan.npy')
+    return np.load(data_file_path)
 
 @pytest.fixture
 def target():
-    return np.load('data/points_map.npy')
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    data_file_path = os.path.join(current_dir, 'data', 'points_map.npy')
+    return np.load(data_file_path)
 
 def test_input_types(source, target, max_iterations, tolerance):
     """
