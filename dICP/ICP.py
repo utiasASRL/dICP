@@ -9,9 +9,15 @@ import matplotlib.pyplot as plt
 from dICP.nn import nn
 from dICP.loss import loss
 import torch.nn.functional as F
+import os.path as osp
 
 class ICP:
-    def __init__(self, config_path='../config/dICP_config.yaml', icp_type='pt2pl', max_iterations=100, tolerance=1e-12, differentiable=True):
+    def __init__(self, config_path=None, icp_type='pt2pl', max_iterations=100, tolerance=1e-12, differentiable=True):
+        if config_path is None:
+            current_dir = osp.dirname(osp.abspath(__file__))
+            # Get path to config file
+            config_path = osp.join(current_dir, '../config/dICP_config.yaml')
+        
         def load_config(file_path):
             with open(file_path, 'r') as f:
                 config = yaml.safe_load(f)
