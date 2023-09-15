@@ -1,3 +1,4 @@
+[![Pytest](https://github.com/lisusdaniil/dICP/actions/workflows/pytest.yml/badge.svg)](https://github.com/lisusdaniil/dICP/actions/workflows/pytest.yml)
 # dICP
 Differentiable ICP implementation for learning tasks.
 
