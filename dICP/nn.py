@@ -10,6 +10,7 @@ class nn:
         #x_use, y_use = x, y
         if self.differentiable:
             return self.__diff_nn(x_use, y_use)
+            #return self.__diff_nn2(x_use, y_use)
         else:
             return self.__non_diff_nn(x_use, y_use)
 
@@ -133,20 +134,29 @@ class nn:
 
     def __diff_nn2(self, x, y):
         """
-        Computes the differentiable nearest neighbor of x from the matrix y using the Gumbel-Softmax trick.
+        Computes the differentiable nearest neighbor of all entries in source x 
+        to the target point cloud y using softmax.
+        :param x: Source points (N, n, 3).
+        :param y: Target points (N, m, 3/6).
         """
+        # Expand x and y to have an additional dimension for broadcasting
+        x_use = x.unsqueeze(2)  # shape: (N, n, 1, 3)
+        y_use = y.unsqueeze(1)  # shape: (N, 1, m, 3/6)
+
         # If y has 6 elements, then normals are included, in this case extract first 3 for operations
         # Compute the squared Euclidean distances between x and each point in y
-        distances = torch.sum((x - y[:, :3])**2, dim=1)
+        distances = torch.sum((x_use - y_use[:,:,:,:3])**2, dim=3)     # shape: (N, n, m)
 
         # Apply the Gumbel-Softmax trick to obtain a differentiable approximation of the argmax operation
         logits = -distances
-        noise = torch.empty_like(logits).exponential_().log()  # sample from Gumbel distribution
-        tau = 0.01  # temperature
-        noisy_logits = (logits + noise) / tau  # divide by temperature
-        probs = torch.softmax(noisy_logits, dim=0)
-
+        U = torch.rand(logits.shape, device=logits.device)  # sample from uniform distribution
+        eps = 1e-20
+        noise = -torch.log(-torch.log(U + eps) + eps)  # sample from Gumbel distribution
+        tau = 0.001  # temperature
+        noisy_logits = (logits + noise) / tau  # divide by temperature, shape: (N, n, m)
+        probs = torch.softmax(noisy_logits, dim=2)  # shape: (N, n, m)
+        
         # Compute the weighted average of the points in y using the probabilities
-        neighbor = torch.sum(probs.view(-1, 1) * y, dim=0)
+        neighbor = probs @ y
 
         return neighbor
