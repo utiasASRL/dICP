@@ -22,11 +22,11 @@ def tolerance():
 
 @pytest.fixture
 def source():
-    return np.load('../data/points_scan.npy')
+    return np.load('data/points_scan.npy')
 
 @pytest.fixture
 def target():
-    return np.load('../data/points_map.npy')
+    return np.load('data/points_map.npy')
 
 def test_input_types(source, target, max_iterations, tolerance):
     """
