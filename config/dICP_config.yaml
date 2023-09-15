@@ -1,13 +1,15 @@
 dICP:
   parameters:
-    tanh_steepness: 5.0
-    target_pad_val: 1000 # Value to pad target with for batch composition, 
-                         # want this large enough to never get computed as 
-                         # nearest neighbour for source
-    const_iter: False  # If true, force a constant number of iterations as defined by max_iter
+    tanh_steepness: 5.0   # Steepness of tanh function for weighting
+    target_pad_val: 1000  # Value to pad target with for batch composition, 
+                          # want this large enough to never get computed as 
+                          # nearest neighbour for source
+    const_iter: False     # If true, force a constant number of iterations as defined by max_iter
   
-  functionality:
-    svd: False  # If true, use SVD to solve pt2pt problem, no effect for pt2pl
+  # Not yet implemented
+  #functionality:
+  #  gumbel: False        # If true, use Gumbel-Softmax trick for nearest neighour
+  #  svd: False           # If true, use SVD to solve pt2pt problem, no effect for pt2pl
 
   logging:
-    verbose: False
+    verbose: False        # If true, print out more information

@@ -14,34 +14,6 @@ class nn:
         else:
             return self.__non_diff_nn(x_use, y_use)
 
-    def __diff_nn_old(self, x, y):
-        """
-        Computes the differentiable nearest neighbor of all entries in source x 
-        to the target point cloud y using softmax.
-        :param x: Source points [m x 3].
-        :param y: Target points [n x 3/6].
-        """
-        
-        # Expand x and y to have an additional dimension for broadcasting
-        x_use = x.unsqueeze(1)  # shape: (m, 1, 3)
-        y_use = y.unsqueeze(0)  # shape: (1, n, 3/6)
-
-        # If y has 6 elements, then normals are included, in this case extract first 3 for operations
-        # Compute the squared Euclidean distances between x and each point in y
-        distances = torch.sum((x_use - y_use[:,:,:3])**2, dim=2)     # shape: (m, n)
-
-        # Apply the softmax function to the negative distances to obtain a probability distribution
-        #probs = F.softmax(-distances, dim=1)    # shape: (m, n)
-        # I don't think this is needed?? Just use argmin of distance
-
-        # Compute the argmax of the probability distribution to obtain the index of the closest point
-        index = torch.argmin(distances, dim=1)  # shape: (m,)
-        
-        # Select the closest point from y using the index
-        neighbors = torch.gather(y_use, 1, index.unsqueeze(0).unsqueeze(2).repeat(1, 1, y_use.shape[2])).squeeze(1)
-
-        return neighbors
-
     def __diff_nn(self, x, y):
         """
         Computes the differentiable nearest neighbor of all entries in source x 
@@ -52,19 +24,16 @@ class nn:
         # If y has 6 elements, then normals are included, in this case extract first 3 for operations
         # Compute the squared Euclidean distances between x and each point in y
         distances = torch.cdist(x, y[:, :, :3], p=2)
-        # Apply the softmax function to the negative distances to obtain a probability distribution
-        #probs = F.softmax(-distances, dim=1)    # shape: (m, n)
-        # I don't think this is needed?? Just use argmin of distance
 
-        # Compute the argmax of the probability distribution to obtain the index of the closest point
+        # Compute the argmin of the distances to obtain the index of the closest point
         index = torch.argmin(distances, dim=2)  # shape: (N, n)
         # Select the closest point from y using the index
         n_idx = index.unsqueeze(2).repeat(1, 1, y.shape[-1])
         neighbors = torch.gather(input=y, dim=1, index=n_idx)
+
         return neighbors
 
     def __non_diff_nn(self, x, y):
-        # I dont think theres any difference between diff and non-diff...
         """
         Computes the differentiable nearest neighbor of all entries in source x 
         to the target point cloud y using softmax.
@@ -77,11 +46,7 @@ class nn:
         # Compute the squared Euclidean distances between x and each point in y
         distances = torch.cdist(x, y[:, :, :3], p=2) # shape: (N, n, m)
 
-        # Apply the softmax function to the negative distances to obtain a probability distribution
-        #probs = F.softmax(-distances, dim=1)    # shape: (m, n)
-        # I don't think this is needed?? Just use argmin of distance
-
-        # Compute the argmax of the probability distribution to obtain the index of the closest point
+        # Compute the argmin of the distances to obtain the index of the closest point
         index = torch.argmin(distances, dim=2)  # shape: (N, n)
         
         # Select the closest point from y using the index
@@ -123,6 +88,7 @@ class nn:
         
         return x_use, y_use
 
+    # Nearest neighbour using Gumbel-Softmax trick, not yet integrated
     def __diff_nn2(self, x, y):
         """
         Computes the differentiable nearest neighbor of all entries in source x 

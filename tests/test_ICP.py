@@ -7,14 +7,13 @@ import torch
 torch.set_printoptions(precision=8)
 from dICP.ICP import ICP
 from dICP.visualization import plot_overlay
-from dICP.KDTree_ICP import KDTree
 from pylgmath import se3op
 import matplotlib.pyplot as plt
 from pylgmath import Transformation
 
 @pytest.fixture
 def max_iterations():
-    return 50
+    return 100
 
 @pytest.fixture
 def tolerance():
@@ -27,35 +26,6 @@ def source():
 @pytest.fixture
 def target():
     return np.load('../data/points_map.npy')
-
-def aatest_pt2pt_kdICP(source, target, max_iterations, tolerance):
-    """
-    Test non-differentiable point-to-point ICP algorithm.
-    """
-
-    # Load test scan and map
-    source_tree = KDTree(source[:,:3].tolist())
-    target_tree = KDTree(target[:,:3].tolist())
-    
-    # True 2D transformation is [.1,1,1] (phi,x,y), form T_true 3D transformation
-    relative_pos_xi = np.array([1.0,1.0,0, 0,0,.1]).reshape((6,1))
-    T_st_true = Transformation(xi_ab=relative_pos_xi).matrix()
-    T_ts_true = np.linalg.inv(T_st_true)
-
-    T_init = np.eye(4)
-
-    # Run ICP
-    pt2pt_ICP = ICP(icp_type='pt2pt', differentiable = False, max_iterations=max_iterations, tolerance=tolerance)
-    icp_results = pt2pt_ICP.icp(source_tree, target_tree, T_init)
-    T_ts_pred = icp_results['T']
-    source_transformed = icp_results['pc']
-    # Plot results
-    #target_tree.plot_overlay(source_tree)
-    #target_tree.plot_overlay(source_transformed)
-
-    # Check that the transformation is correct
-    err_T = se3op.tran2vec(T_ts_true @ np.linalg.inv(T_ts_pred))
-    assert(np.linalg.norm(err_T) < tolerance)
 
 def test_pt2pt_dICP(source, target, max_iterations, tolerance):
     """

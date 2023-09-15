@@ -6,7 +6,6 @@ import yaml
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from dICP.KDTree_ICP import KDTree
 from dICP.nn import nn
 from dICP.loss import loss
 import torch.nn.functional as F
@@ -34,138 +33,6 @@ class ICP:
 
     def icp(self, source, target, T_init, weight=None, trim_dist=None, loss_fn=None, dim=3):
         return self.dICP(source, target, T_init, weight, trim_dist, loss_fn, dim)
-        #return self.dICP_single(source, target, T_init, trim_dist, loss_fn, dim)
-    
-        if self.diff:
-            return self.dICP(source, target, T_init, trim_dist, huber_delta, dim)
-        else:
-            if self.icp_type == 'pt2pt':
-                return self.pt2pt_ICP(source, target, T_init)
-            elif self.icp_type == 'pt2pl':
-                pass
-                #self.pt2pl_ICP(source, target, T_init, trim_dist, huber_delta, dim)
-
-    def pt2pt_kdICP(self, source_tree, target_tree, T_init):
-        """
-        Point-to-point ICP algorithm.
-        :param source_tree: Source point cloud tree resolved in source frame ps_s.
-        :param target_tree: Target point cloud tree resolved in target frame pt_t.
-        :param max_iterations: Maximum number of iterations.
-        :param tolerance: Tolerance for convergence.
-        :return: Transformed source point cloud and transformation from source to target T_ts.
-        """
-
-        # Check if source and target are KDTree objects
-        if not isinstance(source_tree, KDTree):
-            # Convert to KDTree
-            source_tree = KDTree(source_tree.tolist())
-        if not isinstance(target_tree, KDTree):
-            # Convert to KDTree
-            target_tree = KDTree(target_tree.tolist())
-
-        # Initialize transformation matrix
-        T_ts = T_init
-        # Source points are resolved in s frame
-        ps_s = np.array(source_tree.points)
-
-        # Iterate until convergence
-        for ii in range(self.max_iterations):
-            # Find nearest neighbour for each point in source, these points are in target frame
-            nn_t = np.array([target_tree.nearest_neighbour(point) for point in ps_s])
-            
-            # Compute centroids
-            mean_ps_s = np.mean(ps_s, axis=0).reshape(3, 1)
-            mean_pt_t = np.mean(nn_t, axis=0).reshape(3, 1)
-
-            # Compute covariance matrix
-            W_st = (nn_t.T - mean_pt_t) @ (ps_s.T - mean_ps_s).T
-            W_st = W_st / len(source_tree.points)
-
-            # Compute SVD
-            U, D, Vt = np.linalg.svd(W_st)
-
-            # Compute rotation matrix from source to "target frame"
-            # This frame is not the true target frame, but we are trying to get there
-            C_ts = U @ np.diag([1, 1, np.linalg.det(U)*np.linalg.det(Vt.T)]) @ Vt
-
-            # Compute translation
-            r_st_t = mean_pt_t - C_ts @ mean_ps_s
-
-            # Update transformation matrix, remember frame t here is the new predicted target frame
-            # T_ts_update has frame s, which is the old best target frame, and frame t, which is the new predicted target frame
-            T_ts_update = np.vstack((np.hstack((C_ts, r_st_t)), np.array([0, 0, 0, 1])))
-            T_ts = T_ts_update @ T_ts
-
-            # Update source point cloud
-            ps_s = (C_ts @ ps_s.T + r_st_t).T
-
-            # Check convergence, if converged then the updated s frame is aligned with the true t frame
-            # This means that T_ts is now composed of the transformation from the original s to the true t
-            if np.sum((ps_s - nn_t) ** 2) < self.tolerance:
-                break
-
-        print("ii: ", ii)
-
-        return KDTree(ps_s.tolist()), T_ts
-
-    def pt2pt_dICP_SVD(self, source, target, T_init, trim_dist=None, huber_delta=None, dim=3):
-        """
-        Differentiable point-to-point ICP algorithm.
-        :param source: A pytorch tensor of shape (n, d) representing the source point cloud.
-        :param target: A pytorch tensor of shape (n, d) representing the target point cloud.
-        :param max_iterations: Maximum number of iterations.
-        :param tolerance: Tolerance for convergence.
-        :return: Transformed source point cloud and transformation from source to target T_ts.
-        :return: Transformation from source to target T_ts.
-        """
-        # Initialize transformation matrix
-        T_ts = T_init
-        # Source points are resolved in s frame
-        ps_s = source[:, 0:3]
-        target = target[:, 0:3]
-
-        # Iterate until convergence
-        for ii in range(self.max_iterations):
-            # Find nearest neighbour for each point in source, these points are in target frame
-            nn_t = torch.zeros((source.shape[0], target.shape[1]), dtype=source.dtype)
-            for jj in range(len(source)):
-                nn_t[jj] = self.nn.find_nn(ps_s[jj].reshape(1, 3), target)
-
-            # Compute centroids
-            mean_ps_s = torch.mean(ps_s, dim=0).reshape(3, 1)
-            mean_pt_t = torch.mean(nn_t, dim=0).reshape(3, 1)
-
-            # Compute covariance matrix
-            W_st = (nn_t.T - mean_pt_t) @ (ps_s.T - mean_ps_s).T
-            W_st = W_st / len(source)
-
-            # Compute SVD
-            U, D, Vt = torch.svd(W_st)
-
-            # Compute rotation matrix from source to "target frame"
-            # This frame is not the true target frame, but we are trying to get there
-            C_ts = U @ torch.diag(torch.tensor([1, 1, torch.det(U) * torch.det(Vt.T)])) @ Vt
-
-            # Compute translation
-            r_st_t = mean_pt_t - C_ts @ mean_ps_s
-
-            # Update transformation matrix, remember frame t here is the new predicted target frame
-            # T_ts_update has frame s, which is the old best target frame, and frame t, which is the new predicted target frame
-            T_ts_update = torch.vstack((torch.hstack((C_ts, r_st_t)), torch.tensor([0, 0, 0, 1])))
-            T_ts = T_ts_update @ T_ts
-
-            # Update source point cloud
-            ps_s = (C_ts @ ps_s.T + r_st_t).T
-
-            # Check convergence, if converged then the updated s frame is aligned with the true t frame
-            # This means that T_ts is now composed of the transformation from the original s to the true t
-            if torch.sum((ps_s - nn_t) ** 2) < self.tolerance:
-                break
-
-        if self.verbose:
-            print("ICP converged in {} iterations".format(ii))
-
-        return ps_s, T_ts
 
     def dICP(self, source, target, T_init, weight=None, trim_dist=None, loss_fn=None, dim=3):
         """
@@ -567,3 +434,63 @@ class ICP:
                                 ).view(x.shape[0], x.shape[1], 3, 3)
 
         return skew_mat
+    
+    # SVD-based ICP, not yet integrated into dICP
+    def pt2pt_dICP_SVD(self, source, target, T_init, trim_dist=None, huber_delta=None, dim=3):
+        """
+        Differentiable point-to-point ICP algorithm.
+        :param source: A pytorch tensor of shape (n, d) representing the source point cloud.
+        :param target: A pytorch tensor of shape (n, d) representing the target point cloud.
+        :param max_iterations: Maximum number of iterations.
+        :param tolerance: Tolerance for convergence.
+        :return: Transformed source point cloud and transformation from source to target T_ts.
+        :return: Transformation from source to target T_ts.
+        """
+        # Initialize transformation matrix
+        T_ts = T_init
+        # Source points are resolved in s frame
+        ps_s = source[:, 0:3]
+        target = target[:, 0:3]
+
+        # Iterate until convergence
+        for ii in range(self.max_iterations):
+            # Find nearest neighbour for each point in source, these points are in target frame
+            nn_t = torch.zeros((source.shape[0], target.shape[1]), dtype=source.dtype)
+            for jj in range(len(source)):
+                nn_t[jj] = self.nn.find_nn(ps_s[jj].reshape(1, 3), target)
+
+            # Compute centroids
+            mean_ps_s = torch.mean(ps_s, dim=0).reshape(3, 1)
+            mean_pt_t = torch.mean(nn_t, dim=0).reshape(3, 1)
+
+            # Compute covariance matrix
+            W_st = (nn_t.T - mean_pt_t) @ (ps_s.T - mean_ps_s).T
+            W_st = W_st / len(source)
+
+            # Compute SVD
+            U, D, Vt = torch.svd(W_st)
+
+            # Compute rotation matrix from source to "target frame"
+            # This frame is not the true target frame, but we are trying to get there
+            C_ts = U @ torch.diag(torch.tensor([1, 1, torch.det(U) * torch.det(Vt.T)])) @ Vt
+
+            # Compute translation
+            r_st_t = mean_pt_t - C_ts @ mean_ps_s
+
+            # Update transformation matrix, remember frame t here is the new predicted target frame
+            # T_ts_update has frame s, which is the old best target frame, and frame t, which is the new predicted target frame
+            T_ts_update = torch.vstack((torch.hstack((C_ts, r_st_t)), torch.tensor([0, 0, 0, 1])))
+            T_ts = T_ts_update @ T_ts
+
+            # Update source point cloud
+            ps_s = (C_ts @ ps_s.T + r_st_t).T
+
+            # Check convergence, if converged then the updated s frame is aligned with the true t frame
+            # This means that T_ts is now composed of the transformation from the original s to the true t
+            if torch.sum((ps_s - nn_t) ** 2) < self.tolerance:
+                break
+
+        if self.verbose:
+            print("ICP converged in {} iterations".format(ii))
+
+        return ps_s, T_ts

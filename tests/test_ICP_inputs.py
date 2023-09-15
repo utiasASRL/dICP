@@ -7,7 +7,6 @@ import torch
 torch.set_printoptions(precision=8)
 from dICP.ICP import ICP
 from dICP.visualization import plot_overlay
-from dICP.KDTree_ICP import KDTree
 from pylgmath import se3op
 import matplotlib.pyplot as plt
 from pylgmath import Transformation
@@ -31,7 +30,7 @@ def target():
 
 def test_input_types(source, target, max_iterations, tolerance):
     """
-    Test differentiable point-to-point ICP algorithm.
+    Test direct tensor or list of tensor input types
     """
 
     # Make into tensors
@@ -98,7 +97,9 @@ def test_input_types(source, target, max_iterations, tolerance):
     assert(np.linalg.norm(err_T) < tolerance)
 
 def test_zero_inputs(source, target, max_iterations, tolerance):
-    # Load in different combinations of missing data
+    """
+    Test different combinations of missing data
+    """
     source_1 = torch.tensor(source, requires_grad=True)
     target_1 = []
 
@@ -141,7 +142,7 @@ def test_zero_inputs(source, target, max_iterations, tolerance):
 
 def test_weight_inputs(source, target, max_iterations, tolerance):
     """
-    Test differentiable point-to-point ICP algorithm.
+    Test different combinations of passing or not passing weights.
     """
 
     # Make into tensors
@@ -197,7 +198,7 @@ def test_weight_inputs(source, target, max_iterations, tolerance):
 
 def test_diff_vs_nondiff_types(source, target, max_iterations, tolerance):
     """
-    Test differentiable point-to-point ICP algorithm.
+    Test that differentiable ICP returns the same result as non-differentiable ICP in easy conditions.
     """
 
     # Make into tensors
