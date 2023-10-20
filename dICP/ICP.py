@@ -33,6 +33,7 @@ class ICP:
         self.const_iter = self.config['dICP']['parameters']['const_iter']
         self.verbose = self.config['dICP']['logging']['verbose']
         self.target_pad_val = self.config['dICP']['parameters']['target_pad_val']
+        self.match_ratio_thresh = self.config['dICP']['logging']['matched_ratio_thresh']
         self.diff = differentiable
 
         self.nn = nn(self.diff)
@@ -218,8 +219,8 @@ class ICP:
                 # This is what e.g. num_iters + (ii+1)*(num_iters==0) does
                 num_iters = torch.where(del_T_ts_norm < self.tolerance, num_iters + (ii+1)*(num_iters==0), num_iters)
                 # Precompute match ratio values
-                num_curr_matched = torch.sum(w > 0.01, dim=1)
-                num_at_start = torch.sum(w_init > 0.01, dim=1)  # Need the > 0.01 since we add fake points with 0 weight for batch
+                num_curr_matched = torch.sum(w > self.match_ratio_thresh, dim=1)
+                num_at_start = torch.sum(w_init > self.match_ratio_thresh, dim=1)
                 num_at_start[num_at_start == 0] = 1  # Avoid divide by 0
                 # Compute matched ratio, again only updating values that were previously 0
                 match_ratio = torch.where(del_T_ts_norm < self.tolerance, match_ratio+num_curr_matched/num_at_start*(match_ratio==0), match_ratio)
@@ -239,8 +240,8 @@ class ICP:
 
         # Save number of iterations and matched ratio for non-converged sources
         num_iters = torch.where(num_iters == 0, ii+1, num_iters)
-        num_curr_matched = torch.sum(w > 0.01, dim=1)
-        num_at_start = torch.sum(w_init > 0.01, dim=1)  # Need the > 0.01 since we add fake points with 0 weight for batch
+        num_curr_matched = torch.sum(w > self.match_ratio_thresh, dim=1)
+        num_at_start = torch.sum(w_init > self.match_ratio_thresh, dim=1)
         num_at_start[num_at_start == 0] = 1  # Avoid divide by 0
         match_ratio = torch.where(match_ratio == 0, num_curr_matched/num_at_start, match_ratio)
 

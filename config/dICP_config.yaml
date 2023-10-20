@@ -12,4 +12,5 @@ dICP:
   #  svd: False           # If true, use SVD to solve pt2pt problem, no effect for pt2pl
 
   logging:
-    verbose: False        # If true, print out more information
+    verbose: False              # If true, print out more information
+    matched_ratio_thresh: 0.1   # Only count points with a weight above this threshold as matched
