@@ -55,12 +55,18 @@ class ICP:
         :param T_init: Initial transformation from source to target T_ts (4, 4). For batch
                         operations, this can be a tensor of shape (N, 4, 4) or a list of
                         length N of tensors of shape (4, 4).
+        :param weight: Optional initial point weight vector (n) or (N x n) or list len(N) (n_N).
+                        If None, all points are weighted equally prior to robust cost or trimming influence.
         :param trim_dist: Distance threshold for trimming outliers. If None, no trimming is done.
         :param loss_fn: Loss function to use in the form 
                         loss_fn = {"name": "[huber/cauchy]", "metric": FLOAT_NUMBER}
                         If None, no loss function used.
-        :return: Transformed source point cloud and transformation from source to target T_ts.
-                 deltas: list of deltas over the iterations, tensor of shape (B, # of ICP iters, 6, 1)
+        :param dim: Number of dimensions over which to optimize the transformation (2 or 3).
+                    If 2, then only optimize for rotation about z-axis and translation in x and y.
+        :return: pc: transformed source point cloud
+                 T_ts: transformation from source to target
+                 deltas: list of step sizes over the iterations, tensor of shape (N, # of ICP iters, 6, 1)
+                 weights: list of weights over the iterations, tensor of shape (N, # of ICP iters, n, 1)
         """
         # Handle batch sizing for various possible inputs
         # This also trims the source pointcloud to dim 3
@@ -205,8 +211,8 @@ class ICP:
         T_ts[:, 0:3, 0:3] = C_ts
         T_ts[:, 0:3, 3] = r_st_t.squeeze(-1)
 
-        deltas = torch.stack(deltas, dim=1) # new shape (B, # of icp iters, 6, 1)
-        weights = torch.stack(weights, dim=1) # new shape (B, # of icp iters, n, 1)
+        deltas = torch.stack(deltas, dim=1) # new shape (N, # of icp iters, 6, 1)
+        weights = torch.stack(weights, dim=1) # new shape (N, # of icp iters, n, 1)
 
         icp_results = {
             "pc": ps_t_final,
