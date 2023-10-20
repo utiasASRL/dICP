@@ -80,6 +80,7 @@ class ICP:
         # Initialize return variables
         deltas = []
         weights = []
+        converged = torch.zeros((N), dtype=torch.bool, device=source.device)
         num_iters = torch.zeros((N), dtype=source.dtype, device=source.device)
         match_ratio = torch.zeros((N), dtype=source.dtype, device=source.device)
 
@@ -208,6 +209,8 @@ class ICP:
 
             # Check for convergence if not constant iterations
             del_T_ts_norm = torch.linalg.norm(del_T_ts, axis=1).detach().squeeze(-1)
+            # Save converged flag
+            converged = torch.where(del_T_ts_norm < self.tolerance, torch.ones_like(del_T_ts_norm, dtype=torch.bool), converged)
             if any(del_T_ts_norm < self.tolerance) and not self.const_iter:
                 # If any del_T_ts is below tolerance, store the iteration number and match ratio
                 # Note, del_T_ts_norm will perpetually be below tolerance once converged
@@ -256,6 +259,7 @@ class ICP:
 
         # Form stats
         stats = {
+            "converged": converged,
             "iterations": num_iters,
             "matched_ratio": match_ratio
         }
