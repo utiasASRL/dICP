@@ -67,6 +67,8 @@ class ICP:
                  T_ts: transformation from source to target
                  deltas: list of step sizes over the iterations, tensor of shape (N, # of ICP iters, 6, 1)
                  weights: list of weights over the iterations, tensor of shape (N, # of ICP iters, n, 1)
+                 stats: dictionary of stats, containing number of iterations till convergence and matched ratio
+                        at convergence for all N batches
         """
         # Handle batch sizing for various possible inputs
         # This also trims the source pointcloud to dim 3
@@ -75,8 +77,11 @@ class ICP:
         # T_init is now a tensor of shape (N, 4, 4)
         source, target, T_init, w_init = self.batch_size_handling(source, target, T_init, weight)
         N = source.shape[0]
+        # Initialize return variables
         deltas = []
         weights = []
+        num_iters = torch.zeros((N), dtype=source.dtype, device=source.device)
+        match_ratio = torch.zeros((N), dtype=source.dtype, device=source.device)
 
         # Confirm that source, target, and T_init types match
         assert source.dtype == target.dtype == T_init.dtype
@@ -204,17 +209,37 @@ class ICP:
             # Check for convergence if not constant iterations
             del_T_ts_norm = torch.linalg.norm(del_T_ts, axis=1).detach().squeeze(-1)
             if any(del_T_ts_norm < self.tolerance) and not self.const_iter:
-                # If any del_T_ts is below tolerance, zero out the corresponding
+                # If any del_T_ts is below tolerance, store the iteration number and match ratio
+                # Note, del_T_ts_norm will perpetually be below tolerance once converged
+                # This is why we only update num_iters and match_ratio cells if they were previously 0 (so first time it converged)
+                # This is what e.g. num_iters + (ii+1)*(num_iters==0) does
+                num_iters = torch.where(del_T_ts_norm < self.tolerance, num_iters + (ii+1)*(num_iters==0), num_iters)
+                # Precompute match ratio values
+                num_curr_matched = torch.sum(w > 0.01, dim=1)
+                num_at_start = torch.sum(w_init > 0.01, dim=1)  # Need the > 0.01 since we add fake points with 0 weight for batch
+                num_at_start[num_at_start == 0] = 1  # Avoid divide by 0
+                # Compute matched ratio, again only updating values that were previously 0
+                match_ratio = torch.where(del_T_ts_norm < self.tolerance, match_ratio+num_curr_matched/num_at_start*(match_ratio==0), match_ratio)
+                
+                # Additionally zero out the corresponding
                 # weights to prevent further updating
                 # This ensures that batch solution is identical to single solution
                 w_conv_fact = torch.where(del_T_ts_norm < self.tolerance, torch.zeros_like(del_T_ts_norm), torch.ones_like(del_T_ts_norm))
                 w_init = w_init * w_conv_fact.unsqueeze(-1)
+
                 if all(del_T_ts_norm < self.tolerance):
                     break
 
         if self.verbose:
             print("ICP converged in {} iterations".format(ii+1))
             print("Final del_T_ts: {}".format(torch.linalg.norm(del_T_ts.detach())))
+
+        # Save number of iterations and matched ratio for non-converged sources
+        num_iters = torch.where(num_iters == 0, ii+1, num_iters)
+        num_curr_matched = torch.sum(w > 0.01, dim=1)
+        num_at_start = torch.sum(w_init > 0.01, dim=1)  # Need the > 0.01 since we add fake points with 0 weight for batch
+        num_at_start[num_at_start == 0] = 1  # Avoid divide by 0
+        match_ratio = torch.where(match_ratio == 0, num_curr_matched/num_at_start, match_ratio)
 
         # Update source point cloud with converged transformation
         ps_t_final = (C_ts @ ps_s + r_st_t).transpose(1,2)
@@ -225,14 +250,22 @@ class ICP:
         T_ts[:, 0:3, 0:3] = C_ts
         T_ts[:, 0:3, 3] = r_st_t.squeeze(-1)
 
+        # Form deltas and weights into tensors for return
         deltas = torch.stack(deltas, dim=1) # new shape (N, # of icp iters, 6, 1)
         weights = torch.stack(weights, dim=1) # new shape (N, # of icp iters, n, 1)
+
+        # Form stats
+        stats = {
+            "iterations": num_iters,
+            "matched_ratio": match_ratio
+        }
 
         icp_results = {
             "pc": ps_t_final,
             "T": T_ts,
             "deltas": deltas,
-            "weights": weights
+            "weights": weights,
+            "stats": stats
         }
 
         return icp_results

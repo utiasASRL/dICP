@@ -39,7 +39,7 @@ def test_input_types(source, target, max_iterations, tolerance):
     """
 
     # Make into tensors
-    source_1 = torch.tensor(source[:50,:3], requires_grad=True)
+    source_1 = torch.tensor(source[:50,:3], requires_grad=False)
     target_1 = torch.tensor(target[:55,:], requires_grad=True)
 
     source_2 = torch.tensor(source[:,:3], requires_grad=True)
@@ -47,6 +47,10 @@ def test_input_types(source, target, max_iterations, tolerance):
 
     source_3 = torch.tensor(source[:55,:3], requires_grad=True)
     target_3 = torch.tensor(target[:60,:], requires_grad=True)
+
+    # Add random outlier to source_1 to mess with matched ratio
+    rand_pt = torch.tensor(np.random.rand(1,3)*1000, requires_grad=False)
+    source_1 = torch.cat((source_1, rand_pt), dim=0)
 
     source_list = [source_1, source_2, source_3]
     target_list = [target_1, target_2, target_3]
@@ -71,6 +75,7 @@ def test_input_types(source, target, max_iterations, tolerance):
 
     # First, test with a single point cloud in loop
     T_ts_pred_array = torch.tensor(np.zeros((3,4,4)), dtype=test_type)
+    matched_ratio_array = torch.zeros((3))
     tic = time.time()
     for ii in range(3):
         source = source_list[ii]
@@ -80,6 +85,7 @@ def test_input_types(source, target, max_iterations, tolerance):
         # Run ICP
         icp_results = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
         T_ts_pred = icp_results['T']
+        matched_ratio_array[ii] = icp_results['stats']['matched_ratio']
 
         T_ts_pred_array[ii,:,:] = T_ts_pred
     
@@ -89,8 +95,8 @@ def test_input_types(source, target, max_iterations, tolerance):
     tic = time.time()
     icp_results = pt2pt_dICP.icp(source_list, target_list, T_init_stack, trim_dist=5.0, loss_fn=loss_fn, dim=2)
     T_ts_pred_batch = icp_results['T']
+    matched_ratio_batch = icp_results['stats']['matched_ratio']
     toc = time.time()
-
     time_batch = toc - tic
 
     print("Time for loop: ", time_loop)
@@ -98,8 +104,11 @@ def test_input_types(source, target, max_iterations, tolerance):
 
     # Check that the transformation is correct
     err_T = se3op.tran2vec(T_ts_pred_array.detach().numpy() @ np.linalg.inv(T_ts_pred_batch.detach().numpy()))
-
     assert(np.linalg.norm(err_T) < tolerance)
+
+    # Check that the matched ratios match
+    assert(np.linalg.norm(matched_ratio_array.detach().numpy() - matched_ratio_batch.detach().numpy()) < tolerance)
+
 
 def test_zero_inputs(source, target, max_iterations, tolerance):
     """
