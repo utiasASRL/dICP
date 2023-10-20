@@ -101,7 +101,7 @@ def test_input_types(source, target, max_iterations, tolerance):
 
     print("Time for loop: ", time_loop)
     print("Time for batch: ", time_batch)
-
+    
     # Check that the transformation is correct
     err_T = se3op.tran2vec(T_ts_pred_array.detach().numpy() @ np.linalg.inv(T_ts_pred_batch.detach().numpy()))
     assert(np.linalg.norm(err_T) < tolerance)

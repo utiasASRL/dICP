@@ -81,6 +81,7 @@ class ICP:
         # Initialize return variables
         deltas = []
         weights = []
+        costs = []
         converged = torch.zeros((N), dtype=torch.bool, device=source.device)
         num_iters = torch.zeros((N), dtype=source.dtype, device=source.device)
         match_ratio = torch.zeros((N), dtype=source.dtype, device=source.device)
@@ -206,7 +207,20 @@ class ICP:
 
             # Save returns 
             deltas.append(del_T_ts.detach())
-            weights.append(w.detach().unsqueeze(-1))
+            # Save weights
+            w_save = w.detach()
+            # If weights are all 0 for a batch, set them equal to the previous weights
+            if len(weights) > 0:
+                w_selection = (torch.sum(w_save, dim=1) == 0.0).unsqueeze(-1) * torch.ones_like(w_save)
+                w_save = torch.where(w_selection != 0, weights[-1].squeeze(-1), w_save)
+            weights.append(w_save.unsqueeze(-1))
+            # Compute cost
+            J = (err_w.transpose(1,2) @ err_w).detach()
+            # If cost is 0, set it equal to the previous cost (means we converged and weights are 0)
+            if len(costs) > 0:
+                J = torch.where(J == 0.0, costs[-1], J)
+
+            costs.append(J)
 
             # Check for convergence if not constant iterations
             del_T_ts_norm = torch.linalg.norm(del_T_ts, axis=1).detach().squeeze(-1)
@@ -257,6 +271,7 @@ class ICP:
         # Form deltas and weights into tensors for return
         deltas = torch.stack(deltas, dim=1) # new shape (N, # of icp iters, 6, 1)
         weights = torch.stack(weights, dim=1) # new shape (N, # of icp iters, n, 1)
+        costs = torch.stack(costs, dim=1).squeeze(-1) # new shape (N, # of icp iters, 1)
 
         # Form stats
         stats = {
@@ -268,6 +283,7 @@ class ICP:
         icp_results = {
             "pc": ps_t_final,
             "T": T_ts,
+            "costs": costs,
             "deltas": deltas,
             "weights": weights,
             "stats": stats
