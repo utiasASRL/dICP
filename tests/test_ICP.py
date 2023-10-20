@@ -57,6 +57,7 @@ def test_pt2pt_dICP(source, target, max_iterations, tolerance):
     icp_results = pt2pt_dICP.icp(source, target, T_init, trim_dist=5.0, loss_fn=loss_fn, dim=2)
     T_ts_pred = icp_results['T']
     source_transformed = icp_results['pc']
+
     # Plot results
     #plot_overlay(source_transformed.detach().numpy(), target.detach().numpy(), file_name='pt2pt_dICP.png')
 

@@ -81,11 +81,25 @@ class ICP:
         # Confirm that source, target, and T_init types match
         assert source.dtype == target.dtype == T_init.dtype
 
+        # If only care about 2D case, zero out z components of source and target
+        # so they don't influence nearest neighbour
+
         if self.icp_type == 'pt2pl':
             # Confirm that normals for target exist
             assert target.shape[2] == 6
         else:
             target = target[:, :, :3]
+
+        if dim == 2:
+            source_2D = torch.zeros((N, source.shape[1], source.shape[2]), dtype=source.dtype, device=source.device)
+            source_2D[:, :, :2] = source[:, :, :2]
+            source = source_2D
+            target_2D = torch.zeros((N, target.shape[1], target.shape[2]), dtype=target.dtype, device=target.device)
+            target_2D[:, :, :2] = target[:, :, :2]
+            # If pt2pl, keep normals except z component
+            if self.icp_type == 'pt2pl':
+                target_2D[:, :, 3:5] = target[:, :, 3:5]
+            target = target_2D
 
         # Load in param
         steep_fact = self.config['dICP']['parameters']['tanh_steepness']
