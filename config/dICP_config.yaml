@@ -8,7 +8,7 @@ dICP:
   
   
   functionality:
-    gumbel: True        # If true, use Gumbel-Softmax trick for nearest neighour
+    gumbel: False        # If true, use Gumbel-Softmax trick for nearest neighour
   # Not yet implemented
   #  svd: False           # If true, use SVD to solve pt2pt problem, no effect for pt2pl
 
