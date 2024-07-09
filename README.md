@@ -8,7 +8,7 @@ conda env create -f environment.yml
 ```
 Then, activate the environment by running
 ```
-conda activate dICP
+conda activate dICP_env
 ```
 
 To test that everything is set up, go into the tests folder and run
