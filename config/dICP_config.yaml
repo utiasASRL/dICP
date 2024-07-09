@@ -8,7 +8,9 @@ dICP:
   
   
   functionality:
-    gumbel: False        # If true, use Gumbel-Softmax trick for nearest neighour
+    gumbel: False         # If true, use Gumbel-Softmax trick for nearest neighour
+    gumbel_eps: 1.0e-10   # Epsilon for Gumbel-Softmax trick
+    gumbel_tau: 0.1       # Temperature for Gumbel-Softmax trick
   # Not yet implemented
   #  svd: False           # If true, use SVD to solve pt2pt problem, no effect for pt2pl
 

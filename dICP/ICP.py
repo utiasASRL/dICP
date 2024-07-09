@@ -37,8 +37,10 @@ class ICP:
         self.diff = differentiable
 
         use_gumbel = self.config['dICP']['functionality']['gumbel']
+        eps = self.config['dICP']['functionality']['gumbel_eps']
+        tau = self.config['dICP']['functionality']['gumbel_tau']
 
-        self.nn = nn(self.diff, use_gumbel=use_gumbel)
+        self.nn = nn(self.diff, use_gumbel=use_gumbel, eps=eps, tau=tau)
 
     def icp(self, source, target, T_init, weight=None, trim_dist=None, loss_fn=None, dim=3):
         return self.dICP(source, target, T_init, weight, trim_dist, loss_fn, dim)

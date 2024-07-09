@@ -2,9 +2,11 @@ import torch
 import torch.nn.functional as F
 
 class nn:
-    def __init__(self, differentiable=True, use_gumbel=True):
+    def __init__(self, differentiable=True, use_gumbel=True, eps=1e-20, tau=0.1):
         self.differentiable = differentiable
         self.use_gumbel = use_gumbel
+        self.eps = eps
+        self.tau = tau
 
     def find_nn(self, x, y):
         x_use, y_use = self.__handle_dimensions(x, y)
@@ -36,6 +38,36 @@ class nn:
         neighbors = torch.gather(input=y, dim=1, index=n_idx)
 
         return neighbors
+
+    # Nearest neighbour using Gumbel-Softmax trick, not yet integrated
+    def __diff_nn_gumbel(self, x, y):
+        """
+        Computes the differentiable nearest neighbor of all entries in source x 
+        to the target point cloud y using softmax.
+        :param x: Source points (N, n, 3).
+        :param y: Target points (N, m, 3/6).
+        """
+        # Expand x and y to have an additional dimension for broadcasting
+        x_use = x.unsqueeze(2)  # shape: (N, n, 1, 3)
+        y_use = y.unsqueeze(1)  # shape: (N, 1, m, 3/6)
+
+        # If y has 6 elements, then normals are included, in this case extract first 3 for operations
+        # Compute the squared Euclidean distances between x and each point in y
+        distances = torch.sum((x_use - y_use[:,:,:,:3])**2, dim=3)     # shape: (N, n, m)
+
+        # Apply the Gumbel-Softmax trick to obtain a differentiable approximation of the argmax operation
+        logits = -distances
+        U = torch.rand(logits.shape, device=logits.device)  # sample from uniform distribution
+        eps = self.eps
+        noise = -torch.log(-torch.log(U + eps) + eps)  # sample from Gumbel distribution
+        tau = self.tau  # temperature
+        noisy_logits = (logits + noise) / tau  # divide by temperature, shape: (N, n, m)
+        probs = torch.softmax(noisy_logits, dim=2)  # shape: (N, n, m)
+        
+        # Compute the weighted average of the points in y using the probabilities
+        neighbor = probs @ y
+
+        return neighbor
 
     def __non_diff_nn(self, x, y):
         """
@@ -91,33 +123,3 @@ class nn:
         assert y_use.shape[2] == 3 or y_use.shape[2] == 6, "y must have 3 or 6 elements in the second dimension."
         
         return x_use, y_use
-
-    # Nearest neighbour using Gumbel-Softmax trick, not yet integrated
-    def __diff_nn_gumbel(self, x, y):
-        """
-        Computes the differentiable nearest neighbor of all entries in source x 
-        to the target point cloud y using softmax.
-        :param x: Source points (N, n, 3).
-        :param y: Target points (N, m, 3/6).
-        """
-        # Expand x and y to have an additional dimension for broadcasting
-        x_use = x.unsqueeze(2)  # shape: (N, n, 1, 3)
-        y_use = y.unsqueeze(1)  # shape: (N, 1, m, 3/6)
-
-        # If y has 6 elements, then normals are included, in this case extract first 3 for operations
-        # Compute the squared Euclidean distances between x and each point in y
-        distances = torch.sum((x_use - y_use[:,:,:,:3])**2, dim=3)     # shape: (N, n, m)
-
-        # Apply the Gumbel-Softmax trick to obtain a differentiable approximation of the argmax operation
-        logits = -distances
-        U = torch.rand(logits.shape, device=logits.device)  # sample from uniform distribution
-        eps = 1e-20
-        noise = -torch.log(-torch.log(U + eps) + eps)  # sample from Gumbel distribution
-        tau = 0.1  # temperature
-        noisy_logits = (logits + noise) / tau  # divide by temperature, shape: (N, n, m)
-        probs = torch.softmax(noisy_logits, dim=2)  # shape: (N, n, m)
-        
-        # Compute the weighted average of the points in y using the probabilities
-        neighbor = probs @ y
-
-        return neighbor
