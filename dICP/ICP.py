@@ -36,7 +36,9 @@ class ICP:
         self.match_ratio_thresh = self.config['dICP']['logging']['matched_ratio_thresh']
         self.diff = differentiable
 
-        self.nn = nn(self.diff)
+        use_gumbel = self.config['dICP']['functionality']['gumbel']
+
+        self.nn = nn(self.diff, use_gumbel=use_gumbel)
 
     def icp(self, source, target, T_init, weight=None, trim_dist=None, loss_fn=None, dim=3):
         return self.dICP(source, target, T_init, weight, trim_dist, loss_fn, dim)

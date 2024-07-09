@@ -2,15 +2,19 @@ import torch
 import torch.nn.functional as F
 
 class nn:
-    def __init__(self, differentiable=True):
+    def __init__(self, differentiable=True, use_gumbel=True):
         self.differentiable = differentiable
+        self.use_gumbel = use_gumbel
 
     def find_nn(self, x, y):
         x_use, y_use = self.__handle_dimensions(x, y)
         #x_use, y_use = x, y
         if self.differentiable:
-            return self.__diff_nn(x_use, y_use)
-            #return self.__diff_nn2(x_use, y_use)
+            if self.use_gumbel:
+                return self.__diff_nn_gumbel(x_use, y_use)
+            else:
+                return self.__diff_nn(x_use, y_use)
+            
         else:
             return self.__non_diff_nn(x_use, y_use)
 
@@ -89,7 +93,7 @@ class nn:
         return x_use, y_use
 
     # Nearest neighbour using Gumbel-Softmax trick, not yet integrated
-    def __diff_nn2(self, x, y):
+    def __diff_nn_gumbel(self, x, y):
         """
         Computes the differentiable nearest neighbor of all entries in source x 
         to the target point cloud y using softmax.
@@ -109,7 +113,7 @@ class nn:
         U = torch.rand(logits.shape, device=logits.device)  # sample from uniform distribution
         eps = 1e-20
         noise = -torch.log(-torch.log(U + eps) + eps)  # sample from Gumbel distribution
-        tau = 0.001  # temperature
+        tau = 0.1  # temperature
         noisy_logits = (logits + noise) / tau  # divide by temperature, shape: (N, n, m)
         probs = torch.softmax(noisy_logits, dim=2)  # shape: (N, n, m)
         
