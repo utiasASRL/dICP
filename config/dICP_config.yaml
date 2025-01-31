@@ -16,4 +16,4 @@ dICP:
 
   logging:
     verbose: False              # If true, print out more information
-    matched_ratio_thresh: 0.1   # Only count points with a weight above this threshold as matched
+    matched_ratio_thresh: 0.0   # Only count points with a weight above this threshold as matched

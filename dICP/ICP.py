@@ -47,7 +47,7 @@ class ICP:
 
     def dICP(self, source, target, T_init, weight=None, trim_dist=None, loss_fn=None, dim=3):
         """
-        Point-to-plane ICP algorithm. Note, source and target pointclouds at each
+        Point-to-point/plane ICP algorithm. Note, source and target pointclouds at each
         batch may be of different sizes. This is dealth with.
         :param source: Source point cloud resolved in source frame ps_s (n, 3/6)
                         (only first 3 dimensions matter). For batch operations, 
@@ -75,6 +75,7 @@ class ICP:
                  stats: dictionary of stats, containing number of iterations till convergence and matched ratio
                         at convergence for all N batches
         """
+        assert dim == 2 or dim == 3, "dim must be 2 or 3"
         # Handle batch sizing for various possible inputs
         # This also trims the source pointcloud to dim 3
         # source is now a tensor of shape (N, n, 3)
@@ -136,28 +137,36 @@ class ICP:
 
             # Find nearest neighbours, these points are in target frame
             nn = self.nn.find_nn(ps_t, target).transpose(1, 2)
-            nn_t = nn[:, :3, :]
 
             # Compute errors
             if self.icp_type == 'pt2pl':
-                nn_err = (ps_t - nn_t).transpose(1,2)
+                nn_err = (ps_t - nn[:, :3]).transpose(1,2)
                 nn_norm = nn[:, 3:].transpose(1,2)
                 err = torch.sum(nn_err * nn_norm, axis=2).unsqueeze(-1)
             else:
-                nn_err = (ps_t - nn_t).transpose(1,2).reshape(N, -1, 1)
+                nn_err = (ps_t - nn[:, :3]).transpose(1,2)
                 err = nn_err
 
             # Compute weights based on trim distance and huber delta
-            # Note, weights are initialized during the batch setup process
-            w = w_init
+            trim_w = torch.ones((N, nn_err.shape[1]), dtype=source.dtype, device=device)
             if trim_dist is not None and trim_dist >= 0.0:
                 trim = loss(name="trim", metric=trim_dist, differentiable=self.diff, tanh_steepness=steep_fact)
-                w = w * trim.get_weight(nn_err)
+                trim_w = trim.get_weight(nn_err)
 
+            loss_w = torch.ones((N, err.shape[1]), dtype=source.dtype, device=device)
             if loss_fn is not None:
                 loss_fn_obj = loss(name=loss_fn['name'], metric=loss_fn['metric'], differentiable=self.diff, tanh_steepness=steep_fact)
-                w = w * loss_fn_obj.get_weight(err).squeeze(-1)
+                loss_w = loss_fn_obj.get_weight(err)
+            
+            if self.icp_type == 'pt2pt':
+                # Need to repeat weights/errors for 3D case, since up to now 
+                trim_w = trim_w.repeat_interleave(3, dim=1)
+                loss_w = loss_w.repeat_interleave(3, dim=1)
+                err = err.reshape(N, -1, 1)
 
+            # Compute the combined weight. Note, weights are initialized during the batch setup process
+            w = w_init * trim_w * loss_w
+            
             # Compute Jacobian components of err with respect to T_ts
             if self.icp_type == 'pt2pl':
                 skew_input = (C_ts @ ps_s).transpose(1,2)
