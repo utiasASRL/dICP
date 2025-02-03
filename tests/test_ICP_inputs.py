@@ -223,12 +223,12 @@ def test_diff_vs_nondiff_types(source, target, max_iterations, tolerance):
     # Check huber and pt2pl
     loss_fn = {"name": "huber", "metric": 1.0}
     trim_dist = 5.0
-    pt2pt_dICP_diff = ICP(icp_type='pt2pl', differentiable=True, max_iterations=max_iterations, tolerance=tolerance)
-    pt2pt_dICP_nondiff = ICP(icp_type='pt2pl', differentiable=False, max_iterations=max_iterations, tolerance=tolerance)
+    pt2pl_dICP_diff = ICP(icp_type='pt2pl', differentiable=True, max_iterations=max_iterations, tolerance=tolerance)
+    pt2pl_dICP_nondiff = ICP(icp_type='pt2pl', differentiable=False, max_iterations=max_iterations, tolerance=tolerance)
 
     # First, test with a single point cloud in loop
-    icp_results_diff = pt2pt_dICP_diff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
-    icp_results_nondiff = pt2pt_dICP_nondiff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+    icp_results_diff = pt2pl_dICP_diff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
+    icp_results_nondiff = pt2pl_dICP_nondiff.icp(source_1, target_1, T_init_1, trim_dist=trim_dist, loss_fn=loss_fn, dim=2)
     T_ts_diff = icp_results_diff['T']
     T_ts_nondiff = icp_results_nondiff['T']
     # Check that the transformation is correct
@@ -250,3 +250,25 @@ def test_diff_vs_nondiff_types(source, target, max_iterations, tolerance):
     # Check that the transformation is correct
     err_T = se3op.tran2vec(T_ts_diff.detach().numpy() @ np.linalg.inv(T_ts_nondiff.detach().numpy()))
     assert(np.linalg.norm(err_T) < tolerance)
+
+def test_padded_inputs(source, target, max_iterations, tolerance):
+    source = torch.tensor(source[:50,:3], requires_grad=True)
+    target = torch.tensor(target[:55,:], requires_grad=True)
+    T_init = torch.eye(4, dtype=source.dtype)
+    # Pad source and target
+    source_pad = torch.cat((source, torch.zeros((20,3))))
+
+    # Set up ICP
+    pt2pt_dICP = ICP(icp_type='pt2pt', differentiable=False, max_iterations=max_iterations, tolerance=tolerance)
+    pt2pt_dICP.source_zeroes_are_pad = True
+    
+    # Run ICP
+    icp_result = pt2pt_dICP.icp(source, target, T_init, dim=2)
+    icp_result_pad = pt2pt_dICP.icp(source_pad, target, T_init, dim=2)
+    err_T = se3op.tran2vec(icp_result['T'].detach().numpy() @ np.linalg.inv(icp_result_pad['T'].detach().numpy()))
+
+    # Check that padded and unpadded transformations are the same
+    assert(np.linalg.norm(err_T) < tolerance)
+    
+
+

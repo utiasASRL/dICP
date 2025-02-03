@@ -4,6 +4,7 @@ dICP:
     target_pad_val: 1000  # Value to pad target with for batch composition, 
                           # want this large enough to never get computed as 
                           # nearest neighbour for source
+    source_zeroes_are_pad: False  # If true, treat zero values in source as padding
     const_iter: False     # If true, force a constant number of iterations as defined by max_iter
   
   

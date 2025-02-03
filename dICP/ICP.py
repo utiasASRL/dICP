@@ -33,6 +33,7 @@ class ICP:
         self.const_iter = self.config['dICP']['parameters']['const_iter']
         self.verbose = self.config['dICP']['logging']['verbose']
         self.target_pad_val = self.config['dICP']['parameters']['target_pad_val']
+        self.source_zeroes_are_pad = self.config['dICP']['parameters']['source_zeroes_are_pad']
         self.match_ratio_thresh = self.config['dICP']['logging']['matched_ratio_thresh']
         self.diff = differentiable
 
@@ -440,6 +441,10 @@ class ICP:
         else:
             raise ValueError("source must be (n x 3/6) or (N x n x 3/6) or list len(N) (n_N x 3/6)")
         
+        # Zero out weights for source points that are padded
+        if self.source_zeroes_are_pad:
+            w = w * (torch.linalg.norm(source_batch, dim=2) != 0.0).to(pt_dtype)
+
         # Deal with target. For target, we want to pad with value large enough to never get
         # selected as closest point. Take the max of the source point cloud and multiply by target_pad_val
         # First, handle case where target is list of (m_i x 3/6) tensors
